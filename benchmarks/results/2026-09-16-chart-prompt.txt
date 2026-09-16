@@ -1,0 +1,16 @@
+Built-in image_gen; new image; productivity-visual infographic.
+Create a clean, minimal Indonesian performance-reference chart, landscape 1536x1024.
+White background, dark navy sans-serif typography, generous whitespace, flat teal and muted purple horizontal bars. No logos, Minecraft scenery, gradients, 3D effects or winner badges.
+Title exactly: "Quantum Spigot vs Purpur"
+Subtitle: "Referensi TPS pada 200 player"
+Prominent disclosure directly below the title: "KONDISI BERBEDA — BUKAN BENCHMARK LANGSUNG"
+Draw two horizontal bars on an honest linear axis from 0 to 20 TPS, with ticks 0, 5, 10, 15, 20.
+Top teal bar: "Quantum Spigot · tes lokal" and value "20,00 TPS". Full length to 20.
+Bottom muted purple bar: "Purpur · laporan situs" and value "19,55 TPS". Its length must be 97.75% of the first bar, almost the same length. Do not exaggerate the tiny numerical difference.
+Under the Quantum bar, concise small metadata: "i3-12100F · RAM 32 GB · bot arena aktif · 5 menit".
+Under the Purpur bar: "Ryzen 5 5600X · RAM 16 GB · konfigurasi default".
+Below the plot, readable notes: "Quantum: minimum sampel TPS 1 menit. Purpur: angka situs belum diverifikasi; versi, beban dan durasi tidak dirinci."
+Prominent final line: "Tidak membuktikan Quantum lebih cepat."
+Small source line: "Sumber Purpur: minecraft-serverhub.com/plugins/software"
+Small date: "16 September 2026"
+Preserve every number exactly. No inferred MSPT, speedup, capacity or invented measurements. Do not label this an equal-condition comparison. All text crisp and legible; keep the chart simple and uncluttered.

@@ -1,0 +1,100 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: QuantumSpigot contributors <noreply@quantumspigot.invalid>
+Date: Wed, 16 Sep 2026 12:00:00 +0800
+Subject: [PATCH] Quantum runtime and tick observability
+
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+Base: PurpurMC/Purpur 3f5d9c0e80b56812c1694e014d44fabf540a4cad
+Paper: e5fe71723e2ffde7cc9fafc085ac3bb73e63175e
+Main-thread observation of existing tick/entity/player-chunk work only.
+Disable inherited server telemetry to avoid identifying Quantum as Purpur.
+
+diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
+index 45c9274..c4d08f4 100644
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
+@@ -314,6 +314,12 @@ public final class RegionizedPlayerChunkLoader {
+             }
+             loader.update(); // can't invoke plugin logic
+             loader.updateQueues(currTime);
++            // Quantum - observe existing per-player queues on their owning thread, after plugin callbacks.
++            if (!loader.removed && loader.world == this.world) {
++                dev.quantumspigot.server.QuantumRuntime.recordPlayerChunkQueues(
++                    loader.loadQueue.size(), loader.loadingQueue.size(), loader.genQueue.size(),
++                    loader.generatingQueue.size(), loader.sendQueue.size(), loader.tickingQueue.size());
++            }
+         }
+     }
+ 
+diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
+index d9402a7..230406a 100644
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -1108,6 +1108,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+         // Paper end - rewrite chunk system
+         // Paper start - Improved watchdog support - move final shutdown items here
+         Util.shutdownExecutors();
++        dev.quantumspigot.server.QuantumRuntime.shutdown(); // Quantum - bounded report drain after world saves
+         this.onServerExit();
+         // Paper end - Improved watchdog support - move final shutdown items here
+     }
+@@ -1181,6 +1182,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+         this.taskExecutionTime = 0L;
+ 
+         this.addTickTime(time);
++        // Quantum - same work-duration boundary as upstream TickData; excludes idle wait.
++        dev.quantumspigot.server.QuantumRuntime.recordTick(time.tickLength() + time.intermediateTaskExecutionTime());
+     }
+ 
+     private void runAllTasksAtTickStart() {
+diff --git a/net/minecraft/server/dedicated/DedicatedServer.java b/net/minecraft/server/dedicated/DedicatedServer.java
+index 9b19888..4df57c1 100644
+--- a/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -259,7 +259,13 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
+         consoleThread.start(); // Paper - Enhance console tab completions for brigadier commands; start console thread after MinecraftServer.console & PaperConfig are initialized
+         io.papermc.paper.command.PaperCommands.registerCommands(this); // Paper - setup /paper command
+         this.server.spark.registerCommandBeforePlugins(this.server); // Paper - spark
+-        com.destroystokyo.paper.Metrics.PaperMetrics.startMetrics(); // Paper - start metrics
++        // Quantum - do not submit this downstream build to Purpur's server telemetry service.
++        try {
++            dev.quantumspigot.server.QuantumRuntime.initialize(this.server, this.options.has("quantum-safe-mode"));
++        } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException exception) {
++            LOGGER.error("Unable to load Quantum configuration", exception);
++            return false;
++        }
+         /*// Purpur start - Purpur config files // Purpur start - Migrate Setting to reintroduce end void rings
+         try {
+             org.purpurmc.purpur.PurpurConfig.init((java.io.File) options.valueOf("purpur-settings"));
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index 32548bd..5ec2332 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -1473,6 +1473,7 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+         profiler.push(entity.typeHolder()::getRegisteredName);
+         profiler.incrementCounter("tickNonPassenger");
+         final boolean isActive = io.papermc.paper.entity.activation.ActivationRange.checkIfActive(entity); // Paper - EAR 2
++        dev.quantumspigot.server.QuantumRuntime.recordEntityTick(isActive); // Quantum - count existing invocation
+         if (isActive) { // Paper - EAR 2
+         entity.tick();
+         entity.postTick(); // CraftBukkit
+@@ -1501,6 +1502,7 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+             ProfilerFiller profiler = Profiler.get();
+             profiler.push(entity.typeHolder()::getRegisteredName);
+             profiler.incrementCounter("tickPassenger");
++            dev.quantumspigot.server.QuantumRuntime.recordEntityTick(isActive); // Quantum - count existing invocation
+             // Paper start - EAR 2
+             if (isActive) {
+             entity.rideTick();
+diff --git a/net/minecraft/server/network/PlayerChunkSender.java b/net/minecraft/server/network/PlayerChunkSender.java
+index 196c01f..443dd05 100644
+--- a/net/minecraft/server/network/PlayerChunkSender.java
++++ b/net/minecraft/server/network/PlayerChunkSender.java
+@@ -82,6 +82,7 @@ public class PlayerChunkSender {
+         // Paper start - Anti-Xray
+         final boolean shouldModify = level.chunkPacketBlockController.shouldModify(connection.player, chunk);
+         connection.send(new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null, shouldModify));
++        dev.quantumspigot.server.QuantumRuntime.recordChunkSent(); // Quantum - counts submitted packets, not delivery acknowledgements
+         // Paper end - Anti-Xray
+         // Paper start - PlayerChunkLoadEvent
+         if (io.papermc.paper.event.packet.PlayerChunkLoadEvent.getHandlerList().getRegisteredListeners().length > 0) {

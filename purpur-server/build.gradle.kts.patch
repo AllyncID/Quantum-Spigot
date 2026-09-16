@@ -1,6 +1,6 @@
 --- a/paper-server/build.gradle.kts
 +++ b/paper-server/build.gradle.kts
-@@ -2,6 +_,8 @@
+@@ -2,6 +2,8 @@ import io.papermc.fill.model.BuildChannel
  import io.papermc.paperweight.attribute.DevBundleOutput
  import io.papermc.paperweight.util.*
  import java.time.Instant
@@ -9,11 +9,12 @@
  
  plugins {
      `java-library`
-@@ -22,9 +_,21 @@
+@@ -22,9 +24,21 @@ paperweight {
      minecraftVersion = providers.gradleProperty("mcVersion")
      gitFilePatches = false
  
 -    updatingMinecraft {
+-        // oldPaperCommit = "d4fe85375af18bfa88f44d7c1e6a61904ae550cc"
 +    // Purpur start - Rebrand
 +    val purpur = forks.register("purpur") {
 +        upstream.patchDir("paperServer") {
@@ -22,18 +23,17 @@
 +            patchesDir = rootDirectory.dir("purpur-server/paper-patches")
 +            outputDir = rootDirectory.dir("paper-server")
 +        }
-+    }
+     }
 +    activeFork = purpur
 +    // Purpur end - Rebrand
 +
 +    /*updatingMinecraft { // Purpur start - TODO - snapshot - we don't need this
-         // oldPaperCommit = "d4fe85375af18bfa88f44d7c1e6a61904ae550cc"
--    }
++        // oldPaperCommit = "d4fe85375af18bfa88f44d7c1e6a61904ae550cc"
 +    }*/ // Purpur end - TODO - snapshot - we don't need this
  }
  
  tasks.generateDevelopmentBundle {
-@@ -86,7 +_,21 @@
+@@ -86,7 +100,21 @@ if (project.providers.gradleProperty("publishDevBundle").isPresent) {
      }
  }
  
@@ -56,7 +56,7 @@
  configurations.named(log4jPlugins.compileClasspathConfigurationName) {
      extendsFrom(configurations.compileClasspath.get())
  }
-@@ -109,7 +_,7 @@
+@@ -109,7 +137,7 @@ abstract class MockitoAgentProvider : CommandLineArgumentProvider {
  }
  
  dependencies {
@@ -65,7 +65,7 @@
      implementation("ca.spottedleaf:leafpile:1.2.0")
      implementation("org.jline:jline-terminal-ffm:3.27.1") // use ffm on java 22+
      implementation("org.jline:jline-terminal-jni:3.27.1") // fall back to jni on java 21
-@@ -135,6 +_,10 @@
+@@ -135,6 +163,10 @@ dependencies {
      implementation("org.ow2.asm:asm-commons:9.9.1")
      implementation("org.spongepowered:configurate-yaml:4.2.0")
  
@@ -76,7 +76,7 @@
      // Deps that were previously in the API but have now been moved here for backwards compat, eventually to be removed
      runtimeOnly("commons-lang:commons-lang:2.6")
      runtimeOnly("org.xerial:sqlite-jdbc:3.49.1.0")
-@@ -164,21 +_,21 @@
+@@ -164,21 +196,21 @@ tasks.jar {
          val git = Git(rootProject.layout.projectDirectory.path)
          val mcVersion = rootProject.providers.gradleProperty("mcVersion").get()
          val build = System.getenv("BUILD_NUMBER") ?: null
@@ -89,22 +89,22 @@
          attributes(
              "Main-Class" to "org.bukkit.craftbukkit.Main",
 -            "Implementation-Title" to "Paper",
-+            "Implementation-Title" to "Purpur", // Purpur
++            "Implementation-Title" to "QuantumSpigot", // Quantum
              "Implementation-Version" to implementationVersion,
              "Implementation-Vendor" to date,
 -            "Specification-Title" to "Paper",
-+            "Specification-Title" to "Purpur", // Purpur
++            "Specification-Title" to "QuantumSpigot", // Quantum
              "Specification-Version" to project.version,
 -            "Specification-Vendor" to "Paper Team",
 -            "Brand-Id" to "papermc:paper",
 -            "Brand-Name" to "Paper",
-+            "Specification-Vendor" to "Purpur Team", // Purpur
-+            "Brand-Id" to "purpurmc:purpur", // Purpur
-+            "Brand-Name" to "Purpur", // Purpur
++            "Specification-Vendor" to "QuantumSpigot contributors", // Quantum
++            "Brand-Id" to "quantumspigot:quantumspigot", // Quantum
++            "Brand-Name" to "QuantumSpigot", // Quantum
              "Build-Number" to (build ?: ""),
              "Build-Time" to buildTime.toString(),
              "Git-Branch" to gitBranch,
-@@ -246,7 +_,7 @@
+@@ -246,7 +278,7 @@ tasks.test {
      jvmArgumentProviders.add(provider)
  }
  
@@ -113,7 +113,7 @@
  idea {
      module {
          generatedSourceDirs.add(generatedDir.toFile())
-@@ -326,7 +_,7 @@
+@@ -326,7 +358,7 @@ tasks.registerRunTask("runPaperclip") {
      mainClass.set(null as String?)
  }
  
@@ -122,11 +122,10 @@
      project("paper")
      versionFamily(paperweight.minecraftVersion.map { it.split(".", "-").takeWhile { part -> part.toIntOrNull() != null }.take(2).joinToString(".") })
      version(paperweight.minecraftVersion)
-@@ -341,4 +_,47 @@
+@@ -341,4 +373,56 @@ fill {
              }
          }
      }
--}
 +} */ // Purpur - we don't use fill
 +
 +// tasks.register("rebuildMinecraftSourcesWithGit") {
@@ -171,3 +170,12 @@
 +//
 +//     return files.size
 +// }
++
++// Quantum - distinguish the runnable distribution from the plain server jar.
++tasks.createPaperclipJar {
++    val minecraft = providers.gradleProperty("mcVersion")
++    val buildNumber = providers.environmentVariable("BUILD_NUMBER").orElse("DEV")
++    outputZip.set(layout.buildDirectory.file(minecraft.zip(buildNumber) { mc, build ->
++        "libs/quantumspigot-$mc-build.$build.jar"
++    }))
+ }

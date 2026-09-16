@@ -94,8 +94,15 @@ subprojects {
     }
     tasks.withType<ProcessResources> {
         filteringCharset = Charsets.UTF_8.name()
+        if (project.name == "purpur-server" && name == "processResources") {
+            from(rootProject.file("build-data/quantum-upstream.properties"))
+        }
     }
     tasks.withType<Test> {
+        if (project.name == "purpur-server") {
+            // Upstream selects *TestSuite classes; also discover standalone Quantum tests.
+            include("dev/quantumspigot/**")
+        }
         testLogging {
             showStackTraces = true
             exceptionFormat = TestExceptionFormat.FULL
@@ -108,13 +115,9 @@ subprojects {
         maven(paperMavenPublicUrl)
     }
 
-    extensions.configure<PublishingExtension> {
-        repositories {
-            maven("https://repo.purpurmc.org/snapshots") {
-                name = "purpur"
-                credentials(PasswordCredentials::class)
-            }
-        }
+    // Quantum has no remote publication destination. Local Maven remains available.
+    extensions.configure<BasePluginExtension> {
+        archivesName = project.name.replace("purpur", "quantum")
     }
 }
 
@@ -125,6 +128,12 @@ tasks.register("printMinecraftVersion") {
 }
 
 tasks.register("printPurpurVersion") {
+    doLast {
+        println(project.version)
+    }
+}
+
+tasks.register("printQuantumVersion") {
     doLast {
         println(project.version)
     }

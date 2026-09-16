@@ -1,0 +1,1 @@
+{"server":"quantum","nativeMetrics":true,"allocator":"pooled","sparkEnabled":false,"locatorBar":false,"stages":[{"players":150,"seconds":60,"profile":"mixed"},{"players":200,"seconds":300,"profile":"mixed"},{"players":250,"seconds":300,"profile":"mixed"}]}

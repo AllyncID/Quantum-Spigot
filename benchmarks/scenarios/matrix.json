@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "minimum_repetitions": 3,
+  "warmup_ticks": 600,
+  "sample_ticks": 1200,
+  "variants": ["Paper 26.2", "Purpur pinned upstream", "QuantumSpigot Phase 1"],
+  "scenarios": [
+    {"id": "idle", "players": 0, "workload": "fixed loaded spawn, minimal plugins, empty-server pausing disabled"},
+    {"id": "distributed-100", "players": 100, "workload": "recorded distributed player movement"},
+    {"id": "mixed-300", "players": 300, "workload": "mixed movement, chunk load and interaction"},
+    {"id": "dense-spawn", "workload": "many players in a fixed spawn area"},
+    {"id": "entities", "workload": "fixed entity fixture and active player positions"},
+    {"id": "villagers", "workload": "fixed villager/POI fixture"},
+    {"id": "generation", "workload": "repeatable travel into identical unexplored terrain"},
+    {"id": "automation", "workload": "fixed redstone/hopper fixture"},
+    {"id": "plugins", "workload": "version-pinned representative plugin stack"}
+  ]
+}

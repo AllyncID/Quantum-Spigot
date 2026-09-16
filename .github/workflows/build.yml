@@ -1,10 +1,14 @@
-name: Build
+name: QuantumSpigot build and tests
 on:
   workflow_dispatch:
   pull_request:
   push:
     branches:
       - "ver/**"
+      - "quantum/**"
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -16,17 +20,18 @@ jobs:
         with:
           distribution: temurin
           java-version: 25
-          cache: 'gradle'
       - uses: gradle/actions/setup-gradle@v6
+      - name: Enable smoke plugin compilation
+        run: echo 'include(":test-plugin")' > test-plugin.settings.gradle.kts
       - name: Configure Git
         run: git config --global user.email "no-reply@github.com" && git config --global user.name "Github Actions"
       - name: Apply Patches
         run: ./gradlew applyAllPatches --stacktrace
-      - name: Build
-        run: ./gradlew build --stacktrace
-      - name: Rebuild on Failure
-        if: ${{ failure() }}
-        run: |
-          ./gradlew clean cleanCache --refresh-dependencies
-          ./gradlew applyAllPatches --stacktrace 
-          ./gradlew build --stacktrace
+      - name: Build, checks and tests
+        run: ./gradlew build test --stacktrace
+      - name: Create runnable development jar
+        run: ./gradlew createPaperclipJar --stacktrace
+      - name: Check local testbench metrics
+        run: node --test quantum-testbench/scripts/metrics.test.mjs
+      - name: Build native-protocol bot driver
+        run: ./gradlew -p quantum-testbench installDist --write-locks --stacktrace

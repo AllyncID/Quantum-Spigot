@@ -15,23 +15,19 @@ if (!file(".git").exists()) {
     val errorText = """
         
         =====================[ ERROR ]=====================
-         The Purpur project directory is not a properly cloned Git repository.
+         The QuantumSpigot directory is not a properly cloned Git repository.
          
-         In order to build Purpur from source you must clone
-         the Purpur repository using Git, not download a code
+         In order to build QuantumSpigot from source you must clone
+         the repository using Git, not download a code
          zip from GitHub.
          
-         Built Purpur jars are available for download at
-         https://purpurmc.org/downloads
-         
-         See https://github.com/PurpurMC/Purpur/blob/HEAD/CONTRIBUTING.md
-         for further information on building and modifying Purpur.
+         See docs/DEVELOPMENT.md for building QuantumSpigot.
         ===================================================
     """.trimIndent()
     error(errorText)
 }
 
-rootProject.name = "purpur"
+rootProject.name = "quantumspigot"
 for (name in listOf("purpur-api", "purpur-server", "purpur-checkstyle")) {
     val projName = name.lowercase(Locale.ENGLISH)
     include(projName)

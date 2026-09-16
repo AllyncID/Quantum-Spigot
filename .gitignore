@@ -52,6 +52,8 @@ manifest.mf
 
 # other stuff
 /run
+/artifacts
+/quantum-reports
 
 /purpur-server/build.gradle.kts
 /purpur-server/src/minecraft
