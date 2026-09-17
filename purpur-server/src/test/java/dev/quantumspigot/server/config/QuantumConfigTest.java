@@ -17,6 +17,8 @@ class QuantumConfigTest {
         assertEquals(900, config.diagnostics().historySeconds());
         assertTrue(config.coloredCommands());
         assertFalse(config.performanceActive());
+        assertEquals(QuantumConfig.Algorithms.DISABLED, config.algorithms());
+        assertEquals(QuantumConfig.Async.DISABLED, config.async());
         assertEquals(QuantumConfig.WorldTuning.INHERIT, config.worldTuning("minecraft:overworld"));
         assertEquals(QuantumConfig.Profile.BALANCED, QuantumConfig.load(this.directory, false).profile());
         assertTrue(Files.readString(this.directory.resolve("quantum-global.yml")).contains("#"));
@@ -86,6 +88,16 @@ class QuantumConfigTest {
         Path file = this.directory.resolve("quantum-performance.yml");
         Files.writeString(file, """
             enabled: true
+            experimental:
+              async:
+                chunk-sending: true
+                chunk-workers: 2
+                chunk-queue-capacity: 16
+              algorithms:
+                fast-palette: true
+                compact-storage: true
+                combined-heightmap: true
+                varint-writes: true
             chunks:
               generate-per-second: 20.0
               concurrent-generates: 1
@@ -109,6 +121,7 @@ class QuantumConfigTest {
             """);
         var config = QuantumConfig.load(this.directory, false);
         assertTrue(config.performanceActive());
+        assertEquals(new QuantumConfig.Algorithms(true, true, true, true), config.algorithms());
         assertEquals(true, config.worldTuning("minecraft:overworld").waypointCollections());
         assertEquals(false, config.worldTuning("minecraft:the_nether").waypointCollections());
         assertEquals(4, config.worldTuning("minecraft:overworld").hopper().checkTicks());
@@ -120,6 +133,7 @@ class QuantumConfigTest {
         String saved = Files.readString(file);
         var safe = QuantumConfig.load(this.directory, true);
         assertFalse(safe.performanceActive());
+        assertEquals(QuantumConfig.Algorithms.DISABLED, safe.algorithms());
         assertEquals(QuantumConfig.WorldTuning.INHERIT, safe.worldTuning("minecraft:the_nether"));
         assertEquals(saved, Files.readString(file));
         Files.writeString(this.directory.resolve("quantum-global.yml"), "profile:\n  active: compatibility\n");

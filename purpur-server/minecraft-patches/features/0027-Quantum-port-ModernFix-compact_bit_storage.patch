@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sat, 8 Mar 2025 13:27:07 +0300
+Subject: [PATCH] ModernFix: compact_bit_storage
+
+This patch is based on following mixins:
+* "org/embeddedt/modernfix/common/mixin/perf/compact_bit_storage/PalettedContainerMixin.java"
+By: embeddedt <42941056+embeddedt@users.noreply.github.com>
+As part of: ModernFix (https://github.com/embeddedt/ModernFix)
+Licensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum adaptation: default-off validated setting and upstream fallback.
+Preserve original attribution/license; not covered by LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/world/level/chunk/PalettedContainer.java b/net/minecraft/world/level/chunk/PalettedContainer.java
+index 26dbb9d..b900e42 100644
+--- a/net/minecraft/world/level/chunk/PalettedContainer.java
++++ b/net/minecraft/world/level/chunk/PalettedContainer.java
+@@ -270,6 +270,19 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
+             newData.palette.read(buffer, this.strategy.globalMap());
+             buffer.readFixedSizeLongArray(newData.storage.getRaw());
+             this.data = newData;
++            // Quantum - ModernFix compact storage via DivineMC, GPL-3.0; preserve Paper's finalization.
++            if (dev.quantumspigot.server.QuantumRuntime.algorithms().compactStorage() && newBits > 1) {
++                long[] raw = newData.storage.getRaw();
++                boolean empty = raw.length > 0;
++                for (long value : raw) {
++                    if (value != 0) { empty = false; break; }
++                }
++                if (empty && newData.palette.getSize() > 0) {
++                    T value = newData.palette.valueFor(0);
++                    this.data = this.createOrReuseData(null, 0);
++                    this.data.palette.idFor(value, this);
++                }
++            }
+             this.updateData(this.data); // Paper - optimise palette reads
+             this.addPresetValues(); // Paper - Anti-Xray - Add preset values (inefficient, but this isn't used by the server)
+         } finally {

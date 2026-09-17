@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Fri, 11 Jul 2025 20:39:54 +0300
+Subject: [PATCH] Paper PR: Optimise non-flush packet sending
+
+Original project: https://github.com/PaperMC/Paper
+Original license: GPLv3
+Paper pull request: https://github.com/PaperMC/Paper/pull/10172
+
+Places like entity tracking make heavy use of packet sending,
+and internally netty will use some very expensive thread wakeup
+calls when scheduling.
+
+Thanks to various hacks in ProtocolLib as well as other
+plugins, we cannot simply use a queue of packets to group
+send on execute. We have to call execute for each packet.
+
+Tux's suggestion here is exactly what was needed - tag
+the Runnable indicating it should not make a wakeup call.
+
+Big thanks to Tux for making this possible as I had given
+up on this optimisation before he came along.
+
+Locally this patch drops the entity tracker tick by a full 1.5x.
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum adaptation: default-OFF guard; preserve original fallback and explicit context values.
+Original licensing/attribution retained; outside LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/network/Connection.java b/net/minecraft/network/Connection.java
+index f518501..b97ad2b 100644
+--- a/net/minecraft/network/Connection.java
++++ b/net/minecraft/network/Connection.java
+@@ -488,5 +488,11 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+             this.doSendPacket(packet, listener, flush);
+         } else {
+-            this.channel.eventLoop().execute(() -> this.doSendPacket(packet, listener, flush));
++            // Quantum - Paper PR 10172 via DivineMC, with fallback for alternate/plugin event loops.
++            if (!flush && dev.quantumspigot.server.QuantumRuntime.network().lazyFlush()
++                && this.channel.eventLoop() instanceof io.netty.channel.SingleThreadEventLoop loop) {
++                loop.lazyExecute(() -> this.doSendPacket(packet, listener, false));
++            } else {
++                this.channel.eventLoop().execute(() -> this.doSendPacket(packet, listener, flush));
++            }
+         }
+     }

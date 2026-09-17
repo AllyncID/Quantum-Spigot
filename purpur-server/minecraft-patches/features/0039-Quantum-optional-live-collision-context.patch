@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Tue, 14 Oct 2025 01:42:43 +0300
+Subject: [PATCH] Pufferfish: Make EntityCollisionContext a live representation
+
+This patch is based on the following patch:
+"Make EntityCollisionContext a live representation"
+By: Paul Sauve <paul@technove.co>
+As part of: Airplane (https://github.com/TECHNOVE/Airplane)
+Licensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum adaptation: default-OFF guard; preserve original fallback and explicit context values.
+Original licensing/attribution retained; outside LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/world/phys/shapes/EntityCollisionContext.java b/net/minecraft/world/phys/shapes/EntityCollisionContext.java
+index 2958b47..28241e3 100644
+--- a/net/minecraft/world/phys/shapes/EntityCollisionContext.java
++++ b/net/minecraft/world/phys/shapes/EntityCollisionContext.java
+@@ -18,6 +18,7 @@ public class EntityCollisionContext implements CollisionContext {
+     private final ItemStack heldItem;
+     private final boolean alwaysCollideWithFluid;
+     private final @Nullable Entity entity;
++    private final boolean quantumLive;
+ 
+     protected EntityCollisionContext(
+         final boolean descending,
+@@ -33,23 +34,24 @@ public class EntityCollisionContext implements CollisionContext {
+         this.heldItem = heldItem;
+         this.alwaysCollideWithFluid = alwaysCollideWithFluid;
+         this.entity = entity;
++        this.quantumLive = false; // Explicit position/placement values must never be replaced by entity state.
+     }
+ 
+     @Deprecated
+     protected EntityCollisionContext(final Entity entity, final boolean alwaysCollideWithFluid, final boolean placement) {
+-        this(
+-            entity.isDescending(),
+-            placement,
+-            entity.getY(),
+-            entity instanceof LivingEntity livingEntity ? livingEntity.getMainHandItem() : ItemStack.EMPTY,
+-            alwaysCollideWithFluid,
+-            entity
+-        );
++        // Quantum - Airplane/Pufferfish live-context option via DivineMC (GPL-3.0), default OFF.
++        this.quantumLive = dev.quantumspigot.server.QuantumRuntime.mechanics().liveCollisionContext();
++        this.entity = entity;
++        this.placement = placement;
++        this.alwaysCollideWithFluid = alwaysCollideWithFluid;
++        this.descending = !this.quantumLive && entity.isDescending();
++        this.entityBottom = this.quantumLive ? 0.0 : entity.getY();
++        this.heldItem = !this.quantumLive && entity instanceof LivingEntity livingEntity ? livingEntity.getMainHandItem() : ItemStack.EMPTY;
+     }
+ 
+     @Override
+     public boolean isHoldingItem(final Item item) {
+-        return this.heldItem.is(item);
++        return (this.quantumLive && this.entity instanceof LivingEntity livingEntity ? livingEntity.getMainHandItem() : this.heldItem).is(item);
+     }
+ 
+     @Override
+@@ -69,12 +71,12 @@ public class EntityCollisionContext implements CollisionContext {
+ 
+     @Override
+     public boolean isDescending() {
+-        return this.descending;
++        return this.quantumLive ? this.entity.isDescending() : this.descending;
+     }
+ 
+     @Override
+     public boolean isAbove(final VoxelShape shape, final BlockPos pos, final boolean defaultValue) {
+-        return this.entityBottom > pos.getY() + shape.max(Direction.Axis.Y) - 1.0E-5F;
++        return (this.quantumLive ? this.entity.getY() : this.entityBottom) > pos.getY() + shape.max(Direction.Axis.Y) - 1.0E-5F;
+     }
+ 
+     public @Nullable Entity getEntity() {

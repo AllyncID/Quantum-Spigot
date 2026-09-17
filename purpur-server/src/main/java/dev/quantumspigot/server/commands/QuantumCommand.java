@@ -184,14 +184,23 @@ public final class QuantumCommand extends Command {
         this.line(sender, pair("Main", this.runtime.mainThread().getName() + " / " + this.runtime.mainThread().getState()));
         var b = this.runtime.budget();
         this.line(sender, pair("Logical CPUs", b.processors()).append(separator()).append(pair("Quantum budget", b.total()))
-            .append(separator()).append(pair("Unallocated", b.unallocated())));
+            .append(separator()).append(pair("Unallocated", b.unallocated() - (this.runtime.chunkSerializer() == null ? 0 : this.runtime.chunkSerializer().workers()))));
         var w = this.runtime.worker();
         if (w == null) this.line(sender, note("Diagnostic writer disabled."));
         else {
             this.line(sender, pair("Report workers", w.active()).append(separator()).append(pair("Queue", w.queued() + "/" + w.capacity())));
             this.line(sender, pair("Completed", w.completed()).append(separator()).append(pair("Rejected", w.rejected())).append(separator()).append(pair("Failed", w.failures())));
         }
-        this.line(sender, note("Budget applies to Quantum diagnostics; gameplay stays on the main thread."));
+        var chunks = this.runtime.chunkSerializer();
+        if (chunks == null) this.line(sender, note("Chunk serializer disabled."));
+        else {
+            this.line(sender, pair("Chunk workers", chunks.active() + "/" + chunks.workers()).append(separator())
+                .append(pair("Queue", chunks.queued() + "/" + chunks.capacity())));
+            this.line(sender, pair("Oldest / last queue / copy / compute ms", String.format(Locale.ROOT, "%.2f / %.2f / %.2f / %.2f",
+                chunks.oldestQueueMs(), chunks.lastQueueMs(), chunks.lastSnapshotMs(), chunks.lastComputeMs())));
+            this.line(sender, pair("Completed / fallback / failed / cancelled", chunks.completed() + " / " + chunks.fallbacks() + " / " + chunks.failures() + " / " + chunks.cancelled()));
+        }
+        this.line(sender, note("Quantum budget covers diagnostics and chunk serialization; gameplay stays on the main thread."));
     }
 
     private void profile(CommandSender sender) {
@@ -208,6 +217,11 @@ public final class QuantumCommand extends Command {
         this.line(sender, pair("Concurrent chunks / player", "generate=" + g.chunkLoadingAdvanced.playerMaxConcurrentChunkGenerates
             + ", load=" + g.chunkLoadingAdvanced.playerMaxConcurrentChunkLoads));
         this.line(sender, pair("Bundled Spark", g.spark.enabled));
+        this.line(sender, pair("Experimental algorithms", this.runtime.config().algorithms()));
+        this.line(sender, pair("Experimental mechanics", this.runtime.config().mechanics()));
+        this.line(sender, pair("Experimental worldgen", this.runtime.config().worldgen()));
+        this.line(sender, pair("Experimental async", this.runtime.config().async()));
+        this.line(sender, pair("Experimental network", this.runtime.config().network()));
         var worlds = sender instanceof Player player ? List.of(player.getWorld()) : this.server.getWorlds();
         for (var world : worlds) {
             var level = ((CraftWorld) world).getHandle();

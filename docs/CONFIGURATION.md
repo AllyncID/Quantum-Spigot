@@ -75,3 +75,47 @@ tick skipping, packet reducers and alternate disk formats from other forks are
 not implemented by these settings. The supplied UniverseSpigot file was a feature
 reference; its recommendations do not establish compatibility or performance on
 Quantum 26.2. Anti-Xray is protection and adds work, not a TPS optimization.
+# Experimental algorithm ports
+
+`quantum-performance.yml` accepts the following global settings, all default
+`false`. They also require `enabled: true`; safe/compatibility mode bypasses them.
+Restart after changing them. Their performance acceptance tests are pending.
+
+```yaml
+experimental:
+  algorithms:
+    fast-palette: false
+    compact-storage: false
+    combined-heightmap: false
+    varint-writes: false
+```
+
+These select runtime code paths, not reduced simulation settings. Fast palette
+and compact storage retain the normal packet/storage format; the combined
+heightmap path shares downward block scans; VarInt writes retain the standard
+encoding. `/quantum config` shows the effective switches. Per-dimension waypoint
+collection tuning is `world-defaults.experimental.waypoint-collections` (and
+the same path under a `worlds.<dimension>` override); `inherit` is OFF unless
+the world default enables it.
+
+## Additional experimental ports
+
+All settings below are under `experimental` in `quantum-performance.yml`, require
+`enabled: true`, and are bypassed by compatibility/safe mode. Restart required.
+
+* `mechanics.equipment-tracking` and `mechanics.recipe-lookup`: false.
+* `worldgen.end-biome-cache-entries`: 0 (OFF), maximum 65536 per worker/source.
+* `worldgen.noise-kernel` and `worldgen.beardifier-math`: false.
+* `async.chunk-sending`: false. Only section copies are serialized in workers;
+  block entities, heights, lighting, visibility and plugin events stay on the owner.
+* `async.chunk-workers`: 1, capped by remaining Quantum worker budget.
+* `async.chunk-queue-capacity`: 64 waiting snapshots, range 1-1024. Occupied
+  slots are bounded before making a world copy. Overflow uses native synchronous
+  serialization. Anti-Xray-modified packets use the native path.
+
+`/quantum threads` and lag reports expose actual chunk-worker counts, queue depth,
+oldest waiting age, last queue/copy/compute latency, fallback/failure/cancellation
+counts. These measure serialization submission, not client chunk readiness.
+Experimental performance benefits and combined plugin behavior remain unverified.
+
+Additional default-OFF keys: `experimental.network.visibility-lookup`, `experimental.network.unchanged-movement`, `experimental.network.lazy-flush`, and `experimental.mechanics.live-collision-context`. The last option changes entity-context sampling from captured to current state; explicit placement/position contexts are preserved.

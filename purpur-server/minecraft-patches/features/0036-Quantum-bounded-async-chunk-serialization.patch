@@ -1,0 +1,118 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Mon, 3 Mar 2025 19:29:13 +0300
+Subject: [PATCH] Async Chunk Sending
+
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802 (GPL-3.0).
+Quantum rewrite: owner snapshots, bounded reservations, native overflow and Anti-Xray fallback,
+ordered ready publication, disconnect cancellation, owner-thread failure handling and queue metrics.
+
+diff --git a/net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java b/net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java
+index a52f93d..fe6875c 100644
+--- a/net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java
++++ b/net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java
+@@ -31,6 +31,7 @@ public class ClientboundLevelChunkPacketData {
+     private static final int TWO_MEGABYTES = 2097152; // Paper - diff on change - if this changes, update PacketEncoder
+     private final Map<Heightmap.Types, long[]> heightmaps;
+     private final byte[] buffer;
++    private LevelChunkSection @Nullable [] quantumSections;
+     private final List<ClientboundLevelChunkPacketData.BlockEntityInfo> blockEntitiesData;
+     // Paper start - Handle oversized block entities in chunks
+     private final java.util.List<net.minecraft.network.protocol.Packet<?>> extraPackets = new java.util.ArrayList<>();
+@@ -47,6 +48,11 @@ public class ClientboundLevelChunkPacketData {
+         this(levelChunk, null);
+     }
+     public ClientboundLevelChunkPacketData(final LevelChunk levelChunk, final io.papermc.paper.antixray.ChunkPacketInfo<net.minecraft.world.level.block.state.BlockState> chunkPacketInfo) {
++        this(levelChunk, chunkPacketInfo, false);
++    }
++
++    // Quantum - adapted from DivineMC async chunk sending (GPL-3.0). Snapshot on the owner thread.
++    ClientboundLevelChunkPacketData(final LevelChunk levelChunk, final io.papermc.paper.antixray.ChunkPacketInfo<net.minecraft.world.level.block.state.BlockState> chunkPacketInfo, final boolean deferSerialization) {
+         // Paper end - Anti-Xray - Add chunk packet info
+         this.heightmaps = levelChunk.getHeightmaps()
+             .stream()
+@@ -57,7 +63,14 @@ public class ClientboundLevelChunkPacketData {
+         if (chunkPacketInfo != null) {
+             chunkPacketInfo.setBuffer(this.buffer);
+         }
+-        extractChunkData(new FriendlyByteBuf(this.getWriteBuffer()), levelChunk, chunkPacketInfo);
++        if (deferSerialization) {
++            if (chunkPacketInfo != null) throw new IllegalArgumentException("Anti-Xray requires native serialization");
++            LevelChunkSection[] sections = levelChunk.getSections();
++            this.quantumSections = new LevelChunkSection[sections.length];
++            for (int i = 0; i < sections.length; i++) this.quantumSections[i] = sections[i].copy();
++        } else {
++            extractChunkData(new FriendlyByteBuf(this.getWriteBuffer()), levelChunk, chunkPacketInfo);
++        }
+         this.blockEntitiesData = Lists.newArrayList();
+         int totalTileEntities = 0; // Paper - Handle oversized block entities in chunks
+ 
+@@ -75,6 +88,23 @@ public class ClientboundLevelChunkPacketData {
+         }
+     }
+ 
++    /** Worker owns only copies; ready publication belongs to the enclosing packet. */
++    void quantumSerializeSnapshot() {
++        LevelChunkSection[] sections = java.util.Objects.requireNonNull(this.quantumSections, "Snapshot already consumed");
++        FriendlyByteBuf output = new FriendlyByteBuf(this.getWriteBuffer());
++        try {
++            for (int i = 0; i < sections.length; i++) sections[i].write(output, null, i);
++            if (output.writerIndex() != this.buffer.length) throw new IllegalStateException("Chunk snapshot size changed");
++        } finally {
++            output.release();
++            this.quantumSections = null;
++        }
++    }
++
++    void quantumDiscardSnapshot() {
++        this.quantumSections = null;
++    }
++
+     public ClientboundLevelChunkPacketData(final RegistryFriendlyByteBuf input, final int x, final int z) {
+         this.heightmaps = HEIGHTMAPS_STREAM_CODEC.decode(input);
+         int size = input.readVarInt();
+diff --git a/net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java b/net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java
+index a1018e9..a7ac968 100644
+--- a/net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java
++++ b/net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java
+@@ -57,6 +57,24 @@ public class ClientboundLevelChunkWithLightPacket implements Packet<ClientGamePa
+         levelChunk.getLevel().chunkPacketBlockController.modifyBlocks(this, chunkPacketInfo); // Paper - Anti-Xray - Modify blocks
+     }
+ 
++    // Quantum - DivineMC async chunk sending, adapted to preserve native packet ordering and Anti-Xray.
++    public ClientboundLevelChunkWithLightPacket(final LevelChunk chunk, final LevelLightEngine lightEngine) {
++        ChunkPos pos = chunk.getPos();
++        this.x = pos.x();
++        this.z = pos.z();
++        this.chunkData = new ClientboundLevelChunkPacketData(chunk, null, true);
++        this.lightData = new ClientboundLightUpdatePacketData(pos, lightEngine, null, null);
++    }
++
++    public void quantumFinishSnapshot() {
++        this.chunkData.quantumSerializeSnapshot();
++        this.setReady(true); // Volatile publication of the complete buffer to Connection/Netty.
++    }
++
++    public void quantumDiscardSnapshot() {
++        this.chunkData.quantumDiscardSnapshot(); // Only after disconnect; never publish a partial packet.
++    }
++
+     private ClientboundLevelChunkWithLightPacket(final RegistryFriendlyByteBuf input) {
+         this.x = input.readInt();
+         this.z = input.readInt();
+diff --git a/net/minecraft/server/network/PlayerChunkSender.java b/net/minecraft/server/network/PlayerChunkSender.java
+index 443dd05..1cb4c14 100644
+--- a/net/minecraft/server/network/PlayerChunkSender.java
++++ b/net/minecraft/server/network/PlayerChunkSender.java
+@@ -81,7 +81,9 @@ public class PlayerChunkSender {
+     public static void sendChunk(final ServerGamePacketListenerImpl connection, final ServerLevel level, final LevelChunk chunk) { // Paper - rewrite chunk system - public
+         // Paper start - Anti-Xray
+         final boolean shouldModify = level.chunkPacketBlockController.shouldModify(connection.player, chunk);
+-        connection.send(new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null, shouldModify));
++        ClientboundLevelChunkWithLightPacket packet = shouldModify ? null : dev.quantumspigot.server.QuantumRuntime.serializeChunk(
++            () -> new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine()), connection.connection);
++        connection.send(packet != null ? packet : new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null, shouldModify));
+         dev.quantumspigot.server.QuantumRuntime.recordChunkSent(); // Quantum - counts submitted packets, not delivery acknowledgements
+         // Paper end - Anti-Xray
+         // Paper start - PlayerChunkLoadEvent

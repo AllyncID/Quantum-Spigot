@@ -7,6 +7,7 @@ import dev.quantumspigot.server.diagnostics.DiagnosticExecutor;
 import dev.quantumspigot.server.diagnostics.LagSpikeRecorder;
 import dev.quantumspigot.server.metrics.TickHistory;
 import dev.quantumspigot.server.threading.WorkerBudget;
+import dev.quantumspigot.server.threading.AsyncChunkSerializer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
@@ -33,6 +34,7 @@ public final class QuantumRuntime {
     private final TickHistory ticks;
     private final LagSpikeRecorder lag;
     private final DiagnosticExecutor reports;
+    private final AsyncChunkSerializer chunkSerializer;
     private final ArrayDeque<PluginStall> stalls = new ArrayDeque<>();
     private long pluginStalls;
     private long lastPluginWarning;
@@ -58,6 +60,13 @@ public final class QuantumRuntime {
         java.util.logging.Logger logger = server.getLogger();
         this.reports = needsReports ? new DiagnosticExecutor(config.diagnostics().reportQueueCapacity(),
             error -> logger.log(Level.WARNING, "[QuantumSpigot] Diagnostic writer failed", error)) : null;
+        int chunkWorkers = config.async().chunkSending() ? Math.min(config.async().chunkWorkers(), this.budget.unallocated()) : 0;
+        var minecraft = ((org.bukkit.craftbukkit.CraftServer) server).getServer();
+        this.chunkSerializer = chunkWorkers == 0 ? null : new AsyncChunkSerializer(chunkWorkers, config.async().chunkQueueCapacity(),
+            (connection, error) -> minecraft.execute(() -> {
+                logger.log(Level.SEVERE, "[QuantumSpigot] Chunk serialization failed; closing affected connection", error);
+                connection.disconnect(net.minecraft.network.chat.Component.literal("Chunk serialization failed"));
+            }));
     }
 
     public static void initialize(Server server, boolean safeMode) throws IOException, InvalidConfigurationException {
@@ -72,7 +81,8 @@ public final class QuantumRuntime {
             + " | safe-mode=" + safeMode + " | diagnostics=" + runtime.config.diagnostics().enabled()
             + " | Quantum worker budget=" + runtime.budget.total() + " (diagnostics=" + runtime.budget.diagnostics() + ")");
         server.getLogger().info("[QuantumSpigot] Performance overrides=" + runtime.config.performanceActive()
-            + "; async compute and adaptive control are not installed.");
+            + "; chunk serialization workers=" + (runtime.chunkSerializer == null ? 0 : runtime.chunkSerializer.snapshot().workers())
+            + "; authoritative gameplay remains on the main thread.");
     }
 
     public static boolean configureWorld(String dimensionKey, io.papermc.paper.configuration.WorldConfiguration paper,
@@ -84,12 +94,42 @@ public final class QuantumRuntime {
     public static void shutdown() {
         QuantumRuntime runtime = instance;
         instance = null;
+        if (runtime != null && runtime.chunkSerializer != null) runtime.chunkSerializer.close();
         if (runtime != null && runtime.reports != null) runtime.reports.close();
+    }
+
+    public static net.minecraft.network.protocol.game.@org.jspecify.annotations.Nullable ClientboundLevelChunkWithLightPacket serializeChunk(
+        java.util.function.Supplier<net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket> snapshot,
+        net.minecraft.network.Connection connection) {
+        QuantumRuntime runtime = instance;
+        if (runtime == null || runtime.chunkSerializer == null) return null;
+        if (Thread.currentThread() != runtime.mainThread) throw new IllegalStateException("Chunk snapshot requires owner thread");
+        return runtime.chunkSerializer.submit(snapshot, connection);
     }
 
     public static boolean waypointCollections(String dimensionKey) {
         QuantumRuntime runtime = instance;
         return runtime != null && Boolean.TRUE.equals(runtime.config.worldTuning(dimensionKey).waypointCollections());
+    }
+
+    public static QuantumConfig.Algorithms algorithms() {
+        QuantumRuntime runtime = instance;
+        return runtime == null ? QuantumConfig.Algorithms.DISABLED : runtime.config.algorithms();
+    }
+
+    public static QuantumConfig.Mechanics mechanics() {
+        QuantumRuntime runtime = instance;
+        return runtime == null ? QuantumConfig.Mechanics.DISABLED : runtime.config.mechanics();
+    }
+
+    public static QuantumConfig.Worldgen worldgen() {
+        QuantumRuntime runtime = instance;
+        return runtime == null ? QuantumConfig.Worldgen.DISABLED : runtime.config.worldgen();
+    }
+
+    public static QuantumConfig.Network network() {
+        QuantumRuntime runtime = instance;
+        return runtime == null ? QuantumConfig.Network.DISABLED : runtime.config.network();
     }
 
     public static void recordTick(long durationNanos) {
@@ -166,6 +206,7 @@ public final class QuantumRuntime {
     public TickHistory.Snapshot ticks(int seconds) { return this.ticks.snapshot(System.nanoTime(), seconds); }
     public long[] histogram() { return this.ticks.histogram(System.nanoTime()); }
     public DiagnosticExecutor.Snapshot worker() { return this.reports == null ? null : this.reports.snapshot(); }
+    public AsyncChunkSerializer.Snapshot chunkSerializer() { return this.chunkSerializer == null ? null : this.chunkSerializer.snapshot(); }
     public List<PluginStall> stalls() { return List.copyOf(this.stalls); }
     public long pluginStalls() { return this.pluginStalls; }
     public long lagIncidents() { return this.lag.total(); }
@@ -201,6 +242,7 @@ public final class QuantumRuntime {
         text.append("playerChunkQueueEntriesLastTick=").append(this.chunkQueues()).append('\n');
         text.append("globalChunkIOAndSaveQueues=unavailable\n");
         text.append("worker=").append(this.worker()).append('\n');
+        text.append("chunkSerializer=").append(this.chunkSerializer()).append('\n');
         text.append("heap=").append(ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()).append('\n');
         for (var gc : ManagementFactory.getGarbageCollectorMXBeans()) {
             text.append("gc=").append(gc.getName()).append(" count=").append(gc.getCollectionCount())

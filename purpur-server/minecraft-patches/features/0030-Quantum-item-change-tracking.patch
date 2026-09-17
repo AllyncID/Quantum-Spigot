@@ -1,0 +1,202 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Mon, 29 Sep 2025 17:53:30 +0300
+Subject: [PATCH] Lithium item change tracking for equipment
+
+This patch is based on the following mixins:
+* "net/caffeinemc/mods/lithium/mixin/world/block_entity_ticking/sleeping/*.java"
+* "net/caffeinemc/mods/lithium/mixin/block/hopper/*.java"
+* "net/caffeinemc/mods/lithium/mixin/util/block_entity_retrieval/LevelMixin.java"
+* "net/caffeinemc/mods/lithium/mixin/util/inventory_change_listening/*.java"
+* "net/caffeinemc/mods/lithium/mixin/util/inventory_comparator_tracking/*.java"
+* "net/caffeinemc/mods/lithium/mixin/util/item_component_and_count_tracking/*.java"
+By: 2No2Name <2No2Name@web.de>
+As part of: Lithium (https://github.com/CaffeineMC/lithium)
+Licensed under: LGPL-3.0 (https://www.gnu.org/licenses/lgpl-3.0.html)
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum: explicit opt-in, component/count lifetime fixes and upstream fallback.
+Original attribution/license retained; outside LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/core/component/PatchedDataComponentMap.java b/net/minecraft/core/component/PatchedDataComponentMap.java
+index 08ea810..3b37b30 100644
+--- a/net/minecraft/core/component/PatchedDataComponentMap.java
++++ b/net/minecraft/core/component/PatchedDataComponentMap.java
+@@ -14,7 +14,7 @@ import java.util.Map.Entry;
+ import java.util.stream.Collectors;
+ import org.jspecify.annotations.Nullable;
+ 
+-public final class PatchedDataComponentMap implements DataComponentMap {
++public final class PatchedDataComponentMap implements DataComponentMap, net.caffeinemc.mods.lithium.common.util.change_tracking.ChangePublisher<net.minecraft.core.component.PatchedDataComponentMap> { // DivineMC - lithium: sleeping_block_entity
+     private final DataComponentMap prototype;
+     private Reference2ObjectMap<DataComponentType<?>, Optional<?>> patch;
+     private boolean copyOnWrite;
+@@ -137,6 +137,7 @@ public final class PatchedDataComponentMap implements DataComponentMap {
+     }
+ 
+     private void ensureMapOwnership() {
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking() && this.subscriber != null) this.subscriber.lithium$notify((PatchedDataComponentMap) (Object) this, 0); // DivineMC - lithium: sleeping_block_entity
+         if (this.copyOnWrite) {
+             this.patch = new Reference2ObjectArrayMap<>(this.patch);
+             this.copyOnWrite = false;
+@@ -233,4 +234,22 @@ public final class PatchedDataComponentMap implements DataComponentMap {
+     public String toString() {
+         return "{" + this.stream().map(TypedDataComponent::toString).collect(Collectors.joining(", ")) + "}";
+     }
++
++    // DivineMC start - lithium: sleeping_block_entity
++    private net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.core.component.PatchedDataComponentMap> subscriber;
++
++    @Override
++    public void lithium$subscribe(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.core.component.PatchedDataComponentMap> subscriber, int subscriberData) {
++        if (subscriberData != 0) {
++            throw new UnsupportedOperationException("ComponentMapImpl does not support subscriber data");
++        }
++        this.subscriber = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.combine(this.subscriber, 0, subscriber, 0);
++    }
++
++    @Override
++    public int lithium$unsubscribe(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.core.component.PatchedDataComponentMap> subscriber) {
++        this.subscriber = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.without(this.subscriber, subscriber);
++        return 0;
++    }
++    // DivineMC end - lithium: sleeping_block_entity
+ }
+diff --git a/net/minecraft/world/item/ItemStack.java b/net/minecraft/world/item/ItemStack.java
+index 95f4d1a..5516819 100644
+--- a/net/minecraft/world/item/ItemStack.java
++++ b/net/minecraft/world/item/ItemStack.java
+@@ -99,7 +99,7 @@ import org.apache.commons.lang3.mutable.MutableBoolean;
+ import org.jspecify.annotations.Nullable;
+ import org.slf4j.Logger;
+ 
+-public final class ItemStack implements DataComponentHolder, ItemInstance {
++public final class ItemStack implements DataComponentHolder, ItemInstance, net.caffeinemc.mods.lithium.common.util.change_tracking.ChangePublisher<net.minecraft.world.item.ItemStack>, net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.core.component.PatchedDataComponentMap> { // DivineMC - lithium: sleeping_block_entity
+     private static final List<Component> OP_NBT_WARNING = List.of(
+         Component.translatable("item.op_warning.line1").withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+         Component.translatable("item.op_warning.line2").withStyle(ChatFormatting.RED),
+@@ -994,6 +994,7 @@ public final class ItemStack implements DataComponentHolder, ItemInstance {
+     // CraftBukkit end
+ 
+     public <T> @Nullable T set(final DataComponentType<T> type, final @Nullable T value) {
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking() && type == DataComponents.ENCHANTMENTS && this.subscriber instanceof net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.EnchantmentSubscriber<ItemStack> enchantmentSubscriber) enchantmentSubscriber.lithium$notifyAfterEnchantmentChange(this, this.subscriberData); // DivineMC - lithium: sleeping_block_entity
+         return this.components.set(type, value);
+     }
+ 
+@@ -1339,6 +1340,23 @@ public final class ItemStack implements DataComponentHolder, ItemInstance {
+     }
+ 
+     public void setCount(final int count) {
++        // DivineMC start - lithium: sleeping_block_entity
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking() && count != this.count) {
++            if (this.subscriber instanceof net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.CountChangeSubscriber<ItemStack> countChangeSubscriber) {
++                countChangeSubscriber.lithium$notifyCount(this, this.subscriberData, count);
++            }
++
++            if (count <= 0) {
++                this.components.lithium$unsubscribe(this);
++
++                if (this.subscriber != null) {
++                    this.subscriber.lithium$forceUnsubscribe(this, this.subscriberData);
++                    this.subscriber = null;
++                    this.subscriberData = 0;
++                }
++            }
++        }
++        // DivineMC end - lithium: sleeping_block_entity
+         this.count = count;
+     }
+ 
+@@ -1406,4 +1424,92 @@ public final class ItemStack implements DataComponentHolder, ItemInstance {
+             .or(() -> Optional.ofNullable(this.getItem().getItemDamageSource(attacker)))
+             .orElseGet(attacker::createDamageSource);
+     }
++
++    // DivineMC start - lithium: sleeping_block_entity
++    private net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.world.item.ItemStack> subscriber;
++    private int subscriberData;
++
++    @Override
++    public void lithium$subscribe(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.world.item.ItemStack> subscriber, int subscriberData) {
++        if (this.isEmpty()) {
++            throw new IllegalStateException("Cannot subscribe to an empty ItemStack!");
++        }
++
++        if (this.subscriber == null) {
++            this.startTrackingChanges();
++        }
++        this.subscriber = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.combine(this.subscriber, this.subscriberData, subscriber, subscriberData);
++        if (this.subscriber instanceof net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.Multi<?>) {
++            this.subscriberData = 0;
++        } else {
++            this.subscriberData = subscriberData;
++        }
++    }
++
++    @Override
++    public int lithium$unsubscribe(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.world.item.ItemStack> subscriber) {
++        if (this.isEmpty()) {
++            throw new IllegalStateException("Cannot unsubscribe from an empty ItemStack!");
++        }
++
++        int retval = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.dataOf(this.subscriber, subscriber, this.subscriberData);
++        this.subscriberData = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.dataWithout(this.subscriber, subscriber, this.subscriberData);
++        this.subscriber = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.without(this.subscriber, subscriber);
++
++        if (this.subscriber == null) {
++            this.components.lithium$unsubscribe(this);
++        }
++        return retval;
++    }
++
++    @Override
++    public void lithium$unsubscribeWithData(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.world.item.ItemStack> subscriber, int subscriberData) {
++        if (this.isEmpty()) {
++            throw new IllegalStateException("Cannot unsubscribe from an empty ItemStack!");
++        }
++
++        if (!net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.containsSubscriber(this.subscriber, this.subscriberData, subscriber, subscriberData)) return; // Quantum - preserve a different slot's single subscription
++
++        this.subscriberData = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.dataWithout(this.subscriber, subscriber, this.subscriberData, subscriberData, true);
++        this.subscriber = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.without(this.subscriber, subscriber, subscriberData, true);
++
++        if (this.subscriber == null) {
++            this.components.lithium$unsubscribe(this);
++        }
++    }
++
++    @Override
++    public boolean lithium$isSubscribedWithData(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<net.minecraft.world.item.ItemStack> subscriber, int subscriberData) {
++        if (this.isEmpty()) {
++            throw new IllegalStateException("Cannot be subscribed to an empty ItemStack!");
++        }
++
++        return net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.containsSubscriber(this.subscriber, this.subscriberData, subscriber, subscriberData);
++    }
++
++    @Override
++    public void lithium$forceUnsubscribe(PatchedDataComponentMap publisher, int subscriberData) {
++        if (publisher != this.components) {
++            throw new IllegalStateException("Invalid publisher, expected " + this.components + " but got " + publisher);
++        }
++        this.subscriber.lithium$forceUnsubscribe(this, this.subscriberData);
++        this.subscriber = null;
++        this.subscriberData = 0;
++    }
++
++    private void startTrackingChanges() {
++        this.components.lithium$subscribe(this, 0);
++    }
++
++    @Override
++    public void lithium$notify(PatchedDataComponentMap publisher, int subscriberData) {
++        if (publisher != this.components) {
++            throw new IllegalStateException("Invalid publisher, expected " + this.components + " but got " + publisher);
++        }
++
++        if (this.subscriber != null) {
++            this.subscriber.lithium$notify(this, this.subscriberData);
++        }
++    }
++    // DivineMC end - lithium: sleeping_block_entity
+ }

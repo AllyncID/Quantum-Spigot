@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Wed, 27 Aug 2025 22:48:22 +0300
+Subject: [PATCH] lithium: combined_heightmap_update
+
+This patch is based on the following mixins:
+* "net/caffeinemc/mods/lithium/mixin/world/combined_heightmap_update/LevelChunkMixin"
+By: 2No2Name <2No2Name@web.de>
+As part of: Lithium (https://github.com/CaffeineMC/lithium)
+Licensed under: LGPL-3.0 (https://www.gnu.org/licenses/lgpl-3.0.html)
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum adaptation: default-off validated setting and upstream fallback.
+Preserve original attribution/license; not covered by LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/world/level/chunk/LevelChunk.java b/net/minecraft/world/level/chunk/LevelChunk.java
+index 6815632..eb4324d 100644
+--- a/net/minecraft/world/level/chunk/LevelChunk.java
++++ b/net/minecraft/world/level/chunk/LevelChunk.java
+@@ -381,10 +381,20 @@ public class LevelChunk extends ChunkAccess implements DebugValueSource, ca.spot
+         }
+ 
+         Block newBlock = state.getBlock();
+-        this.heightmaps.get(Heightmap.Types.MOTION_BLOCKING).update(localX, y, localZ, state);
+-        this.heightmaps.get(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES).update(localX, y, localZ, state);
+-        this.heightmaps.get(Heightmap.Types.OCEAN_FLOOR).update(localX, y, localZ, state);
+-        this.heightmaps.get(Heightmap.Types.WORLD_SURFACE).update(localX, y, localZ, state);
++        // DivineMC start - lithium: combined_heightmap_update
++        Heightmap heightmap0 = this.heightmaps.get(Heightmap.Types.MOTION_BLOCKING);
++        Heightmap heightmap1 = this.heightmaps.get(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
++        Heightmap heightmap2 = this.heightmaps.get(Heightmap.Types.OCEAN_FLOOR);
++        Heightmap heightmap3 = this.heightmaps.get(Heightmap.Types.WORLD_SURFACE);
++        if (dev.quantumspigot.server.QuantumRuntime.algorithms().combinedHeightmap()) {
++            net.caffeinemc.mods.lithium.common.world.chunk.heightmap.CombinedHeightmapUpdate.updateHeightmaps(heightmap0, heightmap1, heightmap2, heightmap3, this, localX, y, localZ, state);
++        } else {
++            heightmap0.update(localX, y, localZ, state);
++            heightmap1.update(localX, y, localZ, state);
++            heightmap2.update(localX, y, localZ, state);
++            heightmap3.update(localX, y, localZ, state);
++        }
++        // DivineMC end - lithium: combined_heightmap_update
+         boolean isEmpty = section.hasOnlyAir();
+         if (wasEmpty != isEmpty) {
+             this.level.getChunkSource().getLightEngine().updateSectionStatus(pos, isEmpty);
+diff --git a/net/minecraft/world/level/levelgen/Heightmap.java b/net/minecraft/world/level/levelgen/Heightmap.java
+index dffa0d4..5e65be3 100644
+--- a/net/minecraft/world/level/levelgen/Heightmap.java
++++ b/net/minecraft/world/level/levelgen/Heightmap.java
+@@ -119,10 +119,16 @@ public class Heightmap {
+         return this.data.get(index) + this.chunk.getMinY();
+     }
+ 
+-    private void setHeight(final int x, final int z, final int height) {
++    public void setHeight(final int x, final int z, final int height) { // Quantum - Lithium combined heightmap helper
+         this.data.set(getIndex(x, z), height - this.chunk.getMinY());
+     }
+ 
++    // DivineMC start - lithium: combined_heightmap_update
++    public final Predicate<BlockState> isOpaque() {
++        return this.isOpaque;
++    }
++    // DivineMC end - lithium: combined_heightmap_update
++
+     public void setRawData(final ChunkAccess chunk, final Heightmap.Types type, final long[] data) {
+         long[] rawData = this.data.getRaw();
+         if (rawData.length == data.length) {

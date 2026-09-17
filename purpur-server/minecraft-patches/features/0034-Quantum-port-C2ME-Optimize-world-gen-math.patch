@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sun, 6 Jul 2025 01:55:37 +0300
+Subject: [PATCH] C2ME: Optimize world gen math
+
+This patch is based on following mixins:
+* "com/ishland/c2me/opts/math/mixin/MixinChunkPos.java"
+* "com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java"
+By: ishland <ishlandmc@yeah.net>
+As part of: C2ME-fabric (https://github.com/RelativityMC/C2ME-fabric)
+Licensed under: MIT
+
+TODO: Drop NoiseBasedChunkGenerator, move to single patch
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum adaptation: default-off guard, native fallback and correctness fixes.
+Earlier project attribution and license retained; outside LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/world/level/levelgen/Beardifier.java b/net/minecraft/world/level/levelgen/Beardifier.java
+index 6781da6..8074ddb 100644
+--- a/net/minecraft/world/level/levelgen/Beardifier.java
++++ b/net/minecraft/world/level/levelgen/Beardifier.java
+@@ -166,8 +166,15 @@ public class Beardifier implements DensityFunctions.BeardifierOrMarker {
+     }
+ 
+     private static double getBuryContribution(final double dx, final double dy, final double dz) {
+-        double distance = Mth.length(dx, dy, dz);
+-        return Mth.clampedMap(distance, 0.0, 6.0, 1.0, 0.0);
++        if (!dev.quantumspigot.server.QuantumRuntime.worldgen().beardifierMath()) return Mth.clampedMap(Mth.length(dx, dy, dz), 0.0, 6.0, 1.0, 0.0);
++        // DivineMC start - C2ME: Optimize world gen math
++        double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
++        if (length > 6.0) {
++            return 0.0;
++        } else {
++            return 1.0 - length / 6.0;
++        }
++        // DivineMC end - C2ME: Optimize world gen math
+     }
+ 
+     private static double getBeardContribution(final int dx, final int dy, final int dz, final int yToGround) {

@@ -1,0 +1,278 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Wed, 1 Oct 2025 01:49:00 +0300
+Subject: [PATCH] lithium: equipment_tracking
+
+This patch is based on the following mixins:
+* "net/caffeinemc/mods/lithium/mixin/util/item_component_and_count_tracking/PatchedDataComponentMapMixin.java"
+* "net/caffeinemc/mods/lithium/mixin/util/item_component_and_count_tracking/ItemStackMixin.java"
+* "net/caffeinemc/mods/lithium/mixin/entity/equipment_tracking/enchantment_ticking/LivingEntityMixin.java"
+* "net/caffeinemc/mods/lithium/mixin/entity/equipment_tracking/equipment_changes/LivingEntityMixin.java"
+* "net/caffeinemc/mods/lithium/mixin/entity/equipment_tracking/EntityEquipmentMixin.java"
+* "net/caffeinemc/mods/lithium/common/util/change_tracking/ChangePublisher.java"
+* "net/caffeinemc/mods/lithium/common/util/change_tracking/ChangeSubscriber.java"
+By: 2No2Name <2No2Name@web.de>
+As part of: Lithium (https://github.com/CaffeineMC/lithium)
+Licensed under: LGPL-3.0 (https://www.gnu.org/licenses/lgpl-3.0.html)
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum adaptation: default-off guard, native fallback and correctness fixes.
+Earlier project attribution and license retained; outside LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/world/entity/EntityEquipment.java b/net/minecraft/world/entity/EntityEquipment.java
+index 2004132..26a2672 100644
+--- a/net/minecraft/world/entity/EntityEquipment.java
++++ b/net/minecraft/world/entity/EntityEquipment.java
+@@ -7,7 +7,7 @@ import java.util.Objects;
+ import java.util.Map.Entry;
+ import net.minecraft.world.item.ItemStack;
+ 
+-public class EntityEquipment {
++public class EntityEquipment implements net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.CountChangeSubscriber<net.minecraft.world.item.ItemStack> { // DivineMC - lithium: equipment_tracking
+     public static final Codec<EntityEquipment> CODEC = Codec.unboundedMap(EquipmentSlot.CODEC, ItemStack.CODEC).xmap(items -> {
+         EnumMap<EquipmentSlot, ItemStack> map = new EnumMap<>(EquipmentSlot.class);
+         map.putAll((Map<? extends EquipmentSlot, ? extends ItemStack>)items);
+@@ -18,9 +18,18 @@ public class EntityEquipment {
+         return items;
+     });
+     private final EnumMap<EquipmentSlot, ItemStack> items;
++    // DivineMC start - lithium: equipment_tracking
++    boolean shouldTickEnchantments = false;
++    ItemStack recheckEnchantmentForStack = null;
++    boolean hasUnsentEquipmentChanges = true;
++    private boolean quantumRecheckSubscriptions;
++    // DivineMC end - lithium: equipment_tracking
+ 
+     private EntityEquipment(final EnumMap<EquipmentSlot, ItemStack> items) {
+         this.items = items;
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) {
++            for (ItemStack stack : items.values()) this.onEquipmentReplaced(ItemStack.EMPTY, stack);
++        }
+     }
+ 
+     public EntityEquipment() {
+@@ -28,7 +37,13 @@ public class EntityEquipment {
+     }
+ 
+     public ItemStack set(final EquipmentSlot slot, final ItemStack itemStack) {
+-        return Objects.requireNonNullElse(this.items.put(slot, itemStack), ItemStack.EMPTY);
++        // DivineMC start - lithium: equipment_tracking
++        ItemStack oldStack = Objects.requireNonNullElse(this.items.put(slot, itemStack), ItemStack.EMPTY);
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) {
++            this.onEquipmentReplaced(oldStack, itemStack);
++        }
++        return oldStack;
++        // DivineMC end - lithium: equipment_tracking
+     }
+ 
+     public ItemStack get(final EquipmentSlot slot) {
+@@ -55,8 +70,16 @@ public class EntityEquipment {
+     }
+ 
+     public void setAll(final EntityEquipment equipment) {
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) this.onClear(); // DivineMC - lithium: equipment_tracking
+         this.items.clear();
+         this.items.putAll(equipment.items);
++        // DivineMC start - lithium: equipment_tracking
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) {
++            for (net.minecraft.world.item.ItemStack newStack : this.items.values()) {
++                this.onEquipmentReplaced(ItemStack.EMPTY, newStack);
++            }
++        }
++        // DivineMC end - lithium: equipment_tracking
+     }
+ 
+     public void dropAll(final LivingEntity dropper) {
+@@ -68,6 +91,7 @@ public class EntityEquipment {
+     }
+ 
+     public void clear() {
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) this.onClear(); // DivineMC - lithium: equipment_tracking
+         this.items.replaceAll((s, v) -> ItemStack.EMPTY);
+     }
+ 
+@@ -77,4 +101,117 @@ public class EntityEquipment {
+         return this.items.containsKey(slot);
+     }
+     // Paper end - EntityDeathEvent
++
++    // DivineMC start - lithium: equipment_tracking
++    public boolean lithium$shouldTickEnchantments() {
++        if (this.quantumRecheckSubscriptions) this.lithium$hasUnsentEquipmentChanges();
++        this.processScheduledEnchantmentCheck(null);
++        return this.shouldTickEnchantments;
++    }
++
++    public boolean lithium$hasUnsentEquipmentChanges() {
++        // Zero-count stacks release subscribers. A caller may later grow the same stack without replacing its slot.
++        if (this.quantumRecheckSubscriptions) {
++            this.quantumRecheckSubscriptions = false;
++            for (ItemStack stack : this.items.values()) {
++                if (stack == ItemStack.EMPTY) continue;
++                if (stack.isEmpty()) this.quantumRecheckSubscriptions = true;
++                else if (!stack.lithium$isSubscribedWithData(this, 0)) {
++                    stack.lithium$subscribe(this, 0);
++                    this.hasUnsentEquipmentChanges = true;
++                    this.shouldTickEnchantments |= stackHasTickableEnchantment(stack);
++                }
++            }
++        }
++        return this.hasUnsentEquipmentChanges;
++    }
++
++    public void lithium$onEquipmentChangesSent() {
++        this.hasUnsentEquipmentChanges = false;
++    }
++
++    private void onClear() {
++        this.quantumRecheckSubscriptions = false;
++        this.shouldTickEnchantments = false;
++        this.recheckEnchantmentForStack = null;
++        this.hasUnsentEquipmentChanges = true;
++
++        for (ItemStack oldStack : this.items.values()) {
++            if (!oldStack.isEmpty()) {
++                oldStack.lithium$unsubscribeWithData(this, 0);
++            }
++        }
++    }
++
++    private void onEquipmentReplaced(ItemStack oldStack, ItemStack newStack) {
++        if (!this.shouldTickEnchantments) {
++            if (this.recheckEnchantmentForStack == oldStack) {
++                this.recheckEnchantmentForStack = null;
++            }
++            this.shouldTickEnchantments = stackHasTickableEnchantment(newStack);
++        }
++
++        this.hasUnsentEquipmentChanges = true;
++
++        if (!oldStack.isEmpty()) {
++            oldStack.lithium$unsubscribeWithData(this, 0);
++        }
++        if (!newStack.isEmpty()) {
++            newStack.lithium$subscribe(this, 0);
++        } else if (newStack != ItemStack.EMPTY) {
++            this.quantumRecheckSubscriptions = true;
++        }
++    }
++
++    private static boolean stackHasTickableEnchantment(ItemStack stack) {
++        if (!stack.isEmpty()) {
++            net.minecraft.world.item.enchantment.ItemEnchantments enchantments = stack.get(net.minecraft.core.component.DataComponents.ENCHANTMENTS);
++            if (enchantments != null && !enchantments.isEmpty()) {
++                for (net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> enchantmentEntry : enchantments.keySet()) {
++                    if (!enchantmentEntry.value().getEffects(net.minecraft.world.item.enchantment.EnchantmentEffectComponents.TICK).isEmpty()) {
++                        return true;
++                    }
++                }
++            }
++        }
++        return false;
++    }
++
++    @Override
++    public void lithium$notify(@org.jetbrains.annotations.Nullable ItemStack publisher, int zero) {
++        this.hasUnsentEquipmentChanges = true;
++
++        if (!this.shouldTickEnchantments) {
++            this.processScheduledEnchantmentCheck(publisher);
++            this.scheduleEnchantmentCheck(publisher);
++        }
++    }
++
++    private void scheduleEnchantmentCheck(@org.jetbrains.annotations.Nullable ItemStack toCheck) {
++        this.recheckEnchantmentForStack = toCheck;
++    }
++
++    private void processScheduledEnchantmentCheck(@org.jetbrains.annotations.Nullable ItemStack ignoredStack) {
++        if (this.recheckEnchantmentForStack != null && this.recheckEnchantmentForStack != ignoredStack) {
++            this.shouldTickEnchantments = stackHasTickableEnchantment(this.recheckEnchantmentForStack);
++            this.recheckEnchantmentForStack = null;
++        }
++    }
++
++    @Override
++    public void lithium$notifyCount(ItemStack publisher, int zero, int newCount) {
++        this.hasUnsentEquipmentChanges = true;
++        if (newCount <= 0) {
++            this.quantumRecheckSubscriptions = true;
++            this.onEquipmentReplaced(publisher, ItemStack.EMPTY);
++        }
++    }
++
++    @Override
++    public void lithium$forceUnsubscribe(ItemStack publisher, int zero) {
++        this.quantumRecheckSubscriptions = true;
++        this.hasUnsentEquipmentChanges = true;
++        if (this.recheckEnchantmentForStack == publisher) this.recheckEnchantmentForStack = null;
++    }
++    // DivineMC end - lithium: equipment_tracking
+ }
+diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
+index 2941842..f09e3a2 100644
+--- a/net/minecraft/world/entity/LivingEntity.java
++++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -449,9 +449,17 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+             this.getSleepingPos().ifPresent(this::setPosToBed);
+         }
+ 
+-        if (this.level() instanceof ServerLevel serverLevel) {
+-            EnchantmentHelper.tickEffects(serverLevel, this);
++        // DivineMC start - lithium: equipment_tracking
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) {
++            if ((this instanceof Player || this.equipment.lithium$shouldTickEnchantments()) && this.level() instanceof ServerLevel serverLevel) {
++                EnchantmentHelper.tickEffects(serverLevel, this);
++            }
++        } else {
++            if (this.level() instanceof ServerLevel serverLevel) {
++                EnchantmentHelper.tickEffects(serverLevel, this);
++            }
+         }
++        // DivineMC end - lithium: equipment_tracking
+ 
+         super.baseTick();
+         ProfilerFiller profiler = Profiler.get();
+@@ -3646,6 +3654,16 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+     }
+ 
+     protected @Nullable Map<EquipmentSlot, ItemStack> collectEquipmentChanges(final Map<EquipmentSlot, ItemStack> lastEquipmentItems) {
++        // DivineMC start - lithium: equipment_tracking
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) {
++            final boolean isArmorStandUpdateNoTick = this instanceof net.minecraft.world.entity.decoration.ArmorStand stand && stand.quantumNeedsEquipmentUpdate();
++            if (!isArmorStandUpdateNoTick && !this.equipment.lithium$hasUnsentEquipmentChanges()) {
++                return null;
++            }
++            // Clear before callbacks so plugin mutations during the scan schedule another scan.
++            if (!(this instanceof net.minecraft.world.entity.player.Player)) this.equipment.lithium$onEquipmentChangesSent();
++        }
++        // DivineMC end - lithium: equipment_tracking
+         Map<EquipmentSlot, ItemStack> changedItems = null;
+         // Paper start - EntityEquipmentChangedEvent
+         record EquipmentChangeImpl(org.bukkit.inventory.ItemStack oldItem, org.bukkit.inventory.ItemStack newItem) implements io.papermc.paper.event.entity.EntityEquipmentChangedEvent.EquipmentChange {
+diff --git a/net/minecraft/world/entity/decoration/ArmorStand.java b/net/minecraft/world/entity/decoration/ArmorStand.java
+index 7a97ac6..18fb11d 100644
+--- a/net/minecraft/world/entity/decoration/ArmorStand.java
++++ b/net/minecraft/world/entity/decoration/ArmorStand.java
+@@ -52,6 +52,10 @@ import net.minecraft.world.phys.Vec3;
+ import org.jspecify.annotations.Nullable;
+ 
+ public class ArmorStand extends LivingEntity {
++    public boolean quantumNeedsEquipmentUpdate() {
++        return !this.canTick && this.noTickEquipmentDirty;
++    }
++
+     public static final int WOBBLE_TIME = 5;
+     private static final boolean ENABLE_ARMS = true;
+     public static final Rotations DEFAULT_HEAD_POSE = new Rotations(0.0F, 0.0F, 0.0F);
+@@ -563,8 +567,9 @@ public class ArmorStand extends LivingEntity {
+         maxUpStep = level().purpurConfig.armorstandStepHeight; // Purpur - Add option to set armorstand step height
+         if (!this.canTick) {
+             if (this.noTickEquipmentDirty) {
+-                this.noTickEquipmentDirty = false;
++                if (!dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) this.noTickEquipmentDirty = false; // DivineMC - lithium: equipment_tracking
+                 this.detectEquipmentUpdates();
++                if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking()) this.noTickEquipmentDirty = false; // DivineMC - lithium: equipment_tracking
+             }
+ 
+             return;

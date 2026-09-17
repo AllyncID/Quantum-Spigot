@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sat, 1 Feb 2025 19:17:31 +0300
+Subject: [PATCH] Carpet-Fixes: RecipeManager Optimize
+
+Original project: https://github.com/fxmorin/carpet-fixes
+Optimized the RecipeManager getFirstMatch call to be up to 3x faster
+This is a fully vanilla optimization. Improves: [Blast]Furnace/Campfire/Smoker/Stonecutter/Crafting/Sheep Color Choosing
+This was mostly made for the auto crafting table, since the performance boost is much more visible while using that mod
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum: explicit opt-in, component/count lifetime fixes and upstream fallback.
+Original attribution/license retained; outside LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/world/item/crafting/RecipeManager.java b/net/minecraft/world/item/crafting/RecipeManager.java
+index 6812ade..a7c0876 100644
+--- a/net/minecraft/world/item/crafting/RecipeManager.java
++++ b/net/minecraft/world/item/crafting/RecipeManager.java
+@@ -164,7 +164,8 @@ public class RecipeManager extends SimplePreparableReloadListener<RecipeMap> imp
+ 
+     public <I extends RecipeInput, T extends Recipe<I>> Optional<RecipeHolder<T>> getRecipeFor(final RecipeType<T> type, final I input, final Level level) {
+         // CraftBukkit start
+-        List<RecipeHolder<T>> list = this.recipes.getRecipesFor(type, input, level).toList();
++        List<RecipeHolder<T>> list = dev.quantumspigot.server.QuantumRuntime.mechanics().recipeLookup()
++            ? this.recipes.getRecipesForList(type, input, level) : this.recipes.getRecipesFor(type, input, level).toList(); // Quantum - Carpet-Fixes port, opt-in
+         return (list.isEmpty()) ? Optional.empty() : Optional.of(list.getLast()); // CraftBukkit - SPIGOT-4638: last recipe gets priority
+         // CraftBukkit end
+     }
+diff --git a/net/minecraft/world/item/crafting/RecipeMap.java b/net/minecraft/world/item/crafting/RecipeMap.java
+index ca18f04..6d1230a 100644
+--- a/net/minecraft/world/item/crafting/RecipeMap.java
++++ b/net/minecraft/world/item/crafting/RecipeMap.java
+@@ -72,4 +72,24 @@ public class RecipeMap {
+     public <I extends RecipeInput, T extends Recipe<I>> Stream<RecipeHolder<T>> getRecipesFor(final RecipeType<T> type, final I container, final Level level) {
+         return container.isEmpty() ? Stream.empty() : this.byType(type).stream().filter(r -> r.value().matches(container, level));
+     }
++
++    // DivineMC start - Carpet-Fixes - Remove streams to be faster
++    public <I extends RecipeInput, T extends Recipe<I>> java.util.List<RecipeHolder<T>> getRecipesForList(RecipeType<T> type, I input, Level world) {
++        java.util.List<RecipeHolder<T>> list;
++
++        if (input.isEmpty()) {
++            return java.util.List.of();
++        } else {
++            list = new java.util.ArrayList<>();
++        }
++
++        for (RecipeHolder<T> recipeholder : this.byType(type)) {
++            if (recipeholder.value().matches(input, world)) {
++                list.add(recipeholder);
++            }
++        }
++
++        return list;
++    }
++    // DivineMC end - Carpet-Fixes - Remove streams to be faster
+ }

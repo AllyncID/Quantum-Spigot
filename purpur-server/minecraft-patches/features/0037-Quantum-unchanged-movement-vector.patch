@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sat, 1 Feb 2025 19:50:02 +0300
+Subject: [PATCH] SparklyPaper: Skip distanceToSqr call in
+ ServerEntity#sendChanges if the delta movement hasn't changed
+
+Original project: https://github.com/SparklyPower/SparklyPaper
+
+Patch description:
+
+The "distanceToSqr" call is a bit expensive, so avoiding it is pretty nice, around ~15% calls are skipped with this check
+We could also check if the x,y,z coordinates are equal, but for now, let's just keep the identity check, which also helps us since Minecraft's code does reuse the original delta movement Vec3 object
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum adaptation: default-OFF guard; preserve original fallback and explicit context values.
+Original licensing/attribution retained; outside LICENSE-QUANTUM.
+
+diff --git a/net/minecraft/server/level/ServerEntity.java b/net/minecraft/server/level/ServerEntity.java
+index 60af829..750bd7a 100644
+--- a/net/minecraft/server/level/ServerEntity.java
++++ b/net/minecraft/server/level/ServerEntity.java
+@@ -202,7 +202,8 @@ public class ServerEntity {
+ 
+                 if (this.entity.needsSync || this.trackDelta || this.entity instanceof LivingEntity livingEntity && livingEntity.isFallFlying()) {
+                     Vec3 movement = this.entity.getDeltaMovement();
+-                    double diff = movement.distanceToSqr(this.lastSentMovement);
++                    double diff = dev.quantumspigot.server.QuantumRuntime.network().unchangedMovement() && movement == this.lastSentMovement
++                        ? 0.0 : movement.distanceToSqr(this.lastSentMovement); // Quantum - SparklyPaper/DivineMC immutable vector identity shortcut
+                     if (diff > 1.0E-7 || diff > 0.0 && movement.lengthSqr() == 0.0) {
+                         this.lastSentMovement = movement;
+                         if (this.entity instanceof AbstractHurtingProjectile projectile) {

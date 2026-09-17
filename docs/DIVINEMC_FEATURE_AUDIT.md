@@ -94,6 +94,29 @@ into Quantum's conservative profile. Its default-on async flags are not evidence
 that those contracts are safe for the operator's plugins.
 
 The first independent work is the measured waypoint/visibility hot path plus
-an isolated reproduction of local build-version plugin parsing. No Divine source
-has been imported at this audit checkpoint. The audit covers all brief groups;
+an isolated reproduction of local build-version plugin parsing. Divine ports have since entered integration; see the implementation checkpoint below. The audit covers all brief groups;
 DEFER rows identify real validation/product gates and are not implemented toggles.
+
+## Implementation checkpoint - 2026-09-17
+
+The original decision table above is the pre-port audit. This checkpoint records
+subsequent implementation, not a performance acceptance or completion of all rows.
+
+| Feature group | Current implementation | Validation still required |
+| --- | --- | --- |
+| Hash palette, uniform compact storage, combined heightmap, VarInt/VarLong | 0026-0029, default OFF | Small differential/roundtrip checks pass; combined load comparison pending |
+| Item mutation and equipment tracking | 0030-0031, default OFF | Count/component/replacement/clear/shared-stack check passes; plugin runtime and mechanics pending |
+| Recipe lookup | 0032, default OFF | Ordered matching, removal/re-add and empty-input checks pass; runtime plugin checks pending |
+| Noise kernel and bury math | 0033-0034, default OFF | Random-coordinate bit parity check passes; complete generated-world comparison pending |
+| End biome cache | 0035, default OFF, bounded, native density only | Seed isolation, native Y-independence, custom Y-dependent bypass and capacity checks pass |
+| Async chunk serialization | 0036, default OFF | Snapshot, bounded admission, disconnect and failure checks pass; network/plugin/load validation pending |
+| Sleeping hoppers/block entities | Item mutation prerequisite only | Sleep/wake and inventory invalidation implementation remains pending |
+| Login ProfileResult cache | REJECT M0037 as written | Username-only reuse skips a new session-digest/IP verification. Keep native authentication on every connection |
+| Command parse cache | M0036 needs rewrite | Retains an old source/callback and dispatcher; permissions and source lifecycle cannot be cached indiscriminately |
+
+M0050 bounds the old IOWorker NBT cache used by world-upgrade/recreation paths;
+it is not a demonstrated structure-NBT or normal Moonrise chunk-save hot-path optimization.
+All other unimplemented rows remain pending; default-OFF configuration is not
+counted as an implementation without a connected execution path.
+
+Visibility lookup, immutable movement identity and optional Netty non-flush scheduling now have connected default-OFF paths (Paper 0007, M0037/M0038). Live collision contexts are a separate default-OFF behavior option (M0039); explicit position/placement contexts remain snapshots. Remaining audit rows still require implementation or a justified rejection.

@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sat, 1 Feb 2025 19:52:39 +0300
+Subject: [PATCH] SparklyPaper: Optimize "canSee" checks
+
+Original project: https://github.com/SparklyPower/SparklyPaper
+
+Patch description:
+
+The "canSee" checks is in a hot path, invoked by each entity for each player on the server if they are in tracking range, so optimizing it is pretty nice
+First, we change the original "HashMap" to fastutil's "Object2ObjectOpenHashMap", because the containsKey throughput is better
+Then, we add a "isEmpty()" check before attempting to check if the map contains something
+This seems stupid, but it does seem that it improves the performance a bit, and it makes sense, "containsKey(...)" does not attempt to check the map size before attempting to check if the map contains the key
+We also create a "canSee" method tailored for "ChunkMap#updatePlayer()", a method without the equals check (the "updatePlayer()" already checks if the entity is the same entity) because the CraftPlayer's `equals()` check is a *bit* expensive compared to only checking the object's identity, and because the identity has already been check, we don't need to check it twice.
+
+Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
+Quantum adaptation: default-OFF guard; preserve original fallback and explicit context values.
+Original licensing/attribution retained; outside LICENSE-QUANTUM.
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index 2571b73f9..22ddfd53f 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -236,7 +236,8 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+     private long lastPlayed = 0;
+     private boolean hasPlayedBefore = false;
+     private final ConversationTracker conversationTracker = new ConversationTracker();
+-    private final Map<UUID, Set<WeakReference<Plugin>>> invertedVisibilityEntities = new HashMap<>();
++    private final Map<UUID, Set<WeakReference<Plugin>>> invertedVisibilityEntities = dev.quantumspigot.server.QuantumRuntime.network().visibilityLookup()
++        ? new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>() : new HashMap<>(); // Quantum - SparklyPaper/DivineMC visibility lookup
+     private final Set<UUID> unlistedEntities = new HashSet<>(); // Paper - Add Listing API for Player
+     private static final WeakHashMap<Plugin, WeakReference<Plugin>> pluginWeakReferences = new WeakHashMap<>();
+     private int hash = 0;
+@@ -2143,7 +2144,9 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+ 
+     @Override
+     public boolean canSee(org.bukkit.entity.Entity entity) {
+-        return this.equals(entity) || entity.isVisibleByDefault() ^ this.invertedVisibilityEntities.containsKey(entity.getUniqueId()); // SPIGOT-7312: Can always see self
++        return this.equals(entity) || entity.isVisibleByDefault() ^
++            ((!dev.quantumspigot.server.QuantumRuntime.network().visibilityLookup() || !this.invertedVisibilityEntities.isEmpty())
++                && this.invertedVisibilityEntities.containsKey(entity.getUniqueId())); // Quantum - retain self-visibility and inversion semantics
+     }
+ 
+     public boolean canSeePlayer(UUID uuid) {

@@ -42,7 +42,42 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
     }
     public record Performance(boolean enabled, boolean disableBundledSpark, Double generateRate, Double loadRate,
                               Double sendRate, Integer concurrentGenerates, Integer concurrentLoads,
-                              WorldTuning defaults, Map<String, WorldTuning> worlds) {}
+                              WorldTuning defaults, Map<String, WorldTuning> worlds, Algorithms algorithms, Mechanics mechanics, Worldgen worldgen, Async async, Network network) {}
+    public record Network(boolean visibilityLookup, boolean unchangedMovement, boolean lazyFlush) {
+        public static final Network DISABLED = new Network(false, false, false);
+    }
+
+    public Network network() {
+        return this.performanceActive() ? this.performance.network() : Network.DISABLED;
+    }
+    public record Async(boolean chunkSending, int chunkWorkers, int chunkQueueCapacity) {
+        public static final Async DISABLED = new Async(false, 1, 64);
+    }
+
+    public Async async() {
+        return this.performanceActive() ? this.performance.async() : Async.DISABLED;
+    }
+    public record Worldgen(int endBiomeCacheEntries, boolean noiseKernel, boolean beardifierMath) {
+        public static final Worldgen DISABLED = new Worldgen(0, false, false);
+    }
+
+    public Worldgen worldgen() {
+        return this.performanceActive() ? this.performance.worldgen() : Worldgen.DISABLED;
+    }
+    public record Mechanics(boolean equipmentTracking, boolean recipeLookup, boolean liveCollisionContext) {
+        public static final Mechanics DISABLED = new Mechanics(false, false, false);
+    }
+
+    public Mechanics mechanics() {
+        return this.performanceActive() ? this.performance.mechanics() : Mechanics.DISABLED;
+    }
+    public record Algorithms(boolean fastPalette, boolean compactStorage, boolean combinedHeightmap, boolean varintWrites) {
+        public static final Algorithms DISABLED = new Algorithms(false, false, false, false);
+    }
+
+    public Algorithms algorithms() {
+        return this.performanceActive() ? this.performance.algorithms() : Algorithms.DISABLED;
+    }
 
     public boolean performanceActive() {
         return this.performance.enabled() && !this.safeMode && this.profile != Profile.COMPATIBILITY;
@@ -110,7 +145,28 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
             if (!key.matches("[a-z0-9_-]+:[a-z0-9_/-]+")) throw doc.invalid("worlds." + key, "a dimension key such as minecraft:overworld");
             worlds.put(key, loadWorld(doc, "worlds." + key, defaults));
         }
-        return new Performance(enabled, disableSpark, generate, load, send, concurrentGenerate, concurrentLoad, defaults, Map.copyOf(worlds));
+        Algorithms algorithms = new Algorithms(
+            doc.bool("experimental.algorithms.fast-palette", false, "EXPERIMENTAL: Lithium identity hash palettes; packet/storage format stays upstream. Restart required."),
+            doc.bool("experimental.algorithms.compact-storage", false, "EXPERIMENTAL: compact uniform decoded palettes. Restart required."),
+            doc.bool("experimental.algorithms.combined-heightmap", false, "EXPERIMENTAL: share block searches across four heightmaps. Restart required."),
+            doc.bool("experimental.algorithms.varint-writes", false, "EXPERIMENTAL: bulk writes for standard VarInt/VarLong encodings. Restart required."));
+        Mechanics mechanics = new Mechanics(
+            doc.bool("experimental.mechanics.equipment-tracking", false, "EXPERIMENTAL: track ItemStack/component mutations before equipment scans. Owner-thread gameplay remains synchronous."),
+            doc.bool("experimental.mechanics.recipe-lookup", false, "EXPERIMENTAL: collect matching recipes without a stream; preserves last-match priority and matcher order."),
+            doc.bool("experimental.mechanics.live-collision-context", false, "EXPERIMENTAL BEHAVIOR: entity contexts read current movement/held item instead of capturing them. Explicit placement/position contexts retain captured values."));
+        Worldgen worldgen = new Worldgen(
+            doc.integer("experimental.worldgen.end-biome-cache-entries", 0, 0, 65536, "0 OFF. Per-thread/source bounded cache for native End-island density only; custom samplers use upstream."),
+            doc.bool("experimental.worldgen.noise-kernel", false, "EXPERIMENTAL: C2ME flattened gradient kernel; preserve upstream coordinate rounding and derivative path."),
+            doc.bool("experimental.worldgen.beardifier-math", false, "EXPERIMENTAL: simplify structure bury-distance math. Worldgen parity must be verified before enabling."));
+        Async async = new Async(
+            doc.bool("experimental.async.chunk-sending", false, "EXPERIMENTAL: serialize copied chunk sections on bounded workers. Anti-Xray modification uses native serialization; events stay on the owner thread."),
+            doc.integer("experimental.async.chunk-workers", 1, 1, 32, "Worker request, capped by the remaining Quantum worker budget. Zero available workers uses native serialization."),
+            doc.integer("experimental.async.chunk-queue-capacity", 64, 1, 1024, "Maximum waiting section snapshots. Full queue falls back synchronously without dropping or reordering packets."));
+        Network network = new Network(
+            doc.bool("experimental.network.visibility-lookup", false, "EXPERIMENTAL: specialized visibility map and empty-map shortcut; self-visibility and plugin inversion rules stay unchanged."),
+            doc.bool("experimental.network.unchanged-movement", false, "EXPERIMENTAL: skip distance math when the immutable movement vector is the same object. Packet cadence is unchanged."),
+            doc.bool("experimental.network.lazy-flush", false, "EXPERIMENTAL: avoid waking supported Netty event loops for non-flush sends. Native flush and packet order are retained; other event loops use execute."));
+        return new Performance(enabled, disableSpark, generate, load, send, concurrentGenerate, concurrentLoad, defaults, Map.copyOf(worlds), algorithms, mechanics, worldgen, async, network);
     }
 
     private static WorldTuning loadWorld(Document d, String p, WorldTuning parent) throws InvalidConfigurationException {
