@@ -2,6 +2,7 @@ package dev.quantumspigot.server;
 
 import dev.quantumspigot.server.commands.QuantumCommand;
 import dev.quantumspigot.server.config.QuantumConfig;
+import dev.quantumspigot.server.config.QuantumTuning;
 import dev.quantumspigot.server.diagnostics.DiagnosticExecutor;
 import dev.quantumspigot.server.diagnostics.LagSpikeRecorder;
 import dev.quantumspigot.server.metrics.TickHistory;
@@ -62,11 +63,22 @@ public final class QuantumRuntime {
     public static void initialize(Server server, boolean safeMode) throws IOException, InvalidConfigurationException {
         QuantumRuntime runtime = new QuantumRuntime(server, QuantumConfig.load(Path.of("config", "quantum"), safeMode));
         instance = runtime;
+        QuantumTuning.applyGlobal(runtime.config, io.papermc.paper.configuration.GlobalConfiguration.get());
+        if (runtime.config.performanceActive() && runtime.config.performance().disableBundledSpark()) {
+            ((org.bukkit.craftbukkit.CraftServer) server).spark.disable();
+        }
         QuantumCommand.register(server, runtime);
         server.getLogger().info("[QuantumSpigot] Phase 1 | profile=" + runtime.config.profile().name().toLowerCase(Locale.ROOT)
             + " | safe-mode=" + safeMode + " | diagnostics=" + runtime.config.diagnostics().enabled()
             + " | Quantum worker budget=" + runtime.budget.total() + " (diagnostics=" + runtime.budget.diagnostics() + ")");
-        server.getLogger().info("[QuantumSpigot] Purpur simulation unchanged; async compute and adaptive control are not installed.");
+        server.getLogger().info("[QuantumSpigot] Performance overrides=" + runtime.config.performanceActive()
+            + "; async compute and adaptive control are not installed.");
+    }
+
+    public static boolean configureWorld(String dimensionKey, io.papermc.paper.configuration.WorldConfiguration paper,
+                                        org.spigotmc.SpigotWorldConfig spigot, org.purpurmc.purpur.PurpurWorldConfig purpur) {
+        QuantumRuntime runtime = instance;
+        return runtime == null || QuantumTuning.applyWorld(runtime.config.worldTuning(dimensionKey), paper, spigot, purpur);
     }
 
     public static void shutdown() {

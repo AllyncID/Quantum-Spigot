@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -16,7 +17,8 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 import org.yaml.snakeyaml.error.YAMLException;
 
 /** Validated once at startup; no YAML access from the tick path. */
-public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagnostics, Workers workers) {
+public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagnostics, Workers workers,
+                            boolean coloredCommands, Performance performance) {
     public enum Profile { COMPATIBILITY, BALANCED, CUSTOM }
 
     public record Diagnostics(boolean enabled, int historySeconds, double lagThresholdMs, int consecutiveTicks,
@@ -25,12 +27,39 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
 
     public record Workers(int mainReserve, int jvmReserve, int maximumTotal) {}
 
+    // Null overrides mean inherit the existing Paper/Spigot/Purpur setting.
+    public record Hopper(Integer transferTicks, Integer checkTicks, Integer amount, Boolean cooldownWhenFull,
+                         Boolean disableMoveEvent, Boolean ignoreOccludingBlocks) {}
+    public record ArmorStands(Boolean tick, Boolean collisionLookups, Boolean movement, Boolean waterMovement, Boolean gravity) {}
+    public record AntiXray(Boolean enabled, Integer engineMode, Integer maxBlockHeight, Integer updateRadius,
+                           Boolean lavaObscures, Boolean usePermission) {}
+    public record Blocks(Boolean blockEntityTicking, Integer maxBlockTicks, Integer maxFluidTicks) {}
+    public record WorldTuning(Hopper hopper, ArmorStands armorStands, AntiXray antiXray, Blocks blocks,
+                              String redstone, Integer autoSaveChunks) {
+        public static final WorldTuning INHERIT = new WorldTuning(new Hopper(null, null, null, null, null, null),
+            new ArmorStands(null, null, null, null, null), new AntiXray(null, null, null, null, null, null),
+            new Blocks(null, null, null), null, null);
+    }
+    public record Performance(boolean enabled, boolean disableBundledSpark, Double generateRate, Double loadRate,
+                              Double sendRate, Integer concurrentGenerates, Integer concurrentLoads,
+                              WorldTuning defaults, Map<String, WorldTuning> worlds) {}
+
+    public boolean performanceActive() {
+        return this.performance.enabled() && !this.safeMode && this.profile != Profile.COMPATIBILITY;
+    }
+
+    public WorldTuning worldTuning(String dimensionKey) {
+        return this.performanceActive() ? this.performance.worlds().getOrDefault(dimensionKey, this.performance.defaults())
+            : WorldTuning.INHERIT;
+    }
+
     public static QuantumConfig load(Path directory, boolean safeMode) throws IOException, InvalidConfigurationException {
         Document global = new Document(directory.resolve("quantum-global.yml"));
         Document diagnostics = new Document(directory.resolve("quantum-diagnostics.yml"));
         Document threading = new Document(directory.resolve("quantum-threading.yml"));
+        Document performance = new Document(directory.resolve("quantum-performance.yml"));
         Profile configured;
-        String profile = global.string("profile.active", "balanced", "Phase 1: compatibility, balanced, or custom. All preserve Purpur simulation.");
+        String profile = global.string("profile.active", "balanced", "compatibility bypasses Quantum tuning; balanced/custom permit explicit performance overrides.");
         try {
             configured = Profile.valueOf(profile.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
@@ -50,12 +79,72 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
             new Workers(
                 threading.integer("threading.main-reserve", 2, 0, 1024, "Logical processors reserved when planning Quantum workers."),
                 threading.integer("threading.jvm-reserve", 1, 0, 1024, "Additional reservation for JVM/GC work."),
-                threading.autoPositive("threading.maximum-total-workers", -1, "-1: automatic. Quantum budget only; does not resize upstream workers.")));
+                threading.autoPositive("threading.maximum-total-workers", -1, "-1: automatic. Quantum budget only; does not resize upstream workers.")),
+            global.bool("commands.colored-output", true, "Color Quantum command headers, labels and health metrics; false uses plain text."),
+            loadPerformance(performance));
         // Validate every file before changing any of them.
         global.saveDefaults();
         diagnostics.saveDefaults();
         threading.saveDefaults();
+        performance.saveDefaults();
         return result;
+    }
+
+    private static Performance loadPerformance(Document doc) throws InvalidConfigurationException {
+        boolean enabled = doc.bool("enabled", false, "Opt in to the overrides below. Disabled and compatibility/safe mode retain upstream settings. Restart required.");
+        boolean disableSpark = doc.bool("profiling.disable-bundled-spark", false, "Disable bundled Spark when overrides are active; useful for the measured Windows profiler stalls. External plugins are unaffected.");
+        Double generate = doc.rate("chunks.generate-per-second", "New chunks per player per second: inherit, -1 unlimited, or positive. Lower limits slow exploration.");
+        Double load = doc.rate("chunks.load-per-second", "Chunk loads per player per second; also limits generation. inherit, -1 unlimited, or positive.");
+        Double send = doc.rate("chunks.send-per-second", "Chunk packets per player per second. Lower limits delay client terrain delivery.");
+        Integer concurrentGenerate = doc.overrideInt("chunks.concurrent-generates", null, -1, 1024, "Per player: inherit, -1 unlimited, 0 automatic, or positive.");
+        Integer concurrentLoad = doc.overrideInt("chunks.concurrent-loads", null, -1, 1024, "Per player: inherit, -1 unlimited, 0 automatic, or positive.");
+        WorldTuning defaults = loadWorld(doc, "world-defaults", WorldTuning.INHERIT);
+        if (!doc.yaml.contains("worlds", true)) {
+            doc.yaml.createSection("worlds");
+            doc.yaml.setComments("worlds", List.of("Overrides by dimension key, e.g. minecraft:overworld or minecraft:the_nether. Missing/inherit values use world-defaults."));
+            doc.changed = true;
+        }
+        if (!doc.yaml.isConfigurationSection("worlds")) throw doc.invalid("worlds", "a mapping of dimension keys to settings");
+        Map<String, WorldTuning> worlds = new LinkedHashMap<>();
+        for (String key : doc.yaml.getConfigurationSection("worlds").getKeys(false)) {
+            if (!key.matches("[a-z0-9_-]+:[a-z0-9_/-]+")) throw doc.invalid("worlds." + key, "a dimension key such as minecraft:overworld");
+            worlds.put(key, loadWorld(doc, "worlds." + key, defaults));
+        }
+        return new Performance(enabled, disableSpark, generate, load, send, concurrentGenerate, concurrentLoad, defaults, Map.copyOf(worlds));
+    }
+
+    private static WorldTuning loadWorld(Document d, String p, WorldTuning parent) throws InvalidConfigurationException {
+        Hopper h = parent.hopper();
+        ArmorStands a = parent.armorStands();
+        AntiXray x = parent.antiXray();
+        Blocks b = parent.blocks();
+        return new WorldTuning(
+            new Hopper(
+                d.overrideInt(p + ".hopper.transfer-ticks", h.transferTicks(), 1, 1200, "inherit or transfer interval; vanilla-like 8. Higher values slow farms."),
+                d.overrideInt(p + ".hopper.check-ticks", h.checkTicks(), 1, 1200, "inherit or idle check interval; vanilla-like 1. Higher values delay pickups."),
+                d.overrideInt(p + ".hopper.amount", h.amount(), 1, 64, "inherit or items per transfer; vanilla-like 1. Changes sorter/farm timing."),
+                d.overrideBool(p + ".hopper.cooldown-when-full", h.cooldownWhenFull(), "inherit or true/false. Native Paper cooldown for full hoppers."),
+                d.overrideBool(p + ".hopper.disable-move-event", h.disableMoveEvent(), "inherit or true/false. True bypasses InventoryMoveItemEvent and may break protection/sorting plugins."),
+                d.overrideBool(p + ".hopper.ignore-occluding-blocks", h.ignoreOccludingBlocks(), "inherit or true/false. True changes hopper collection through solid blocks.")),
+            new ArmorStands(
+                d.overrideBool(p + ".armor-stands.tick", a.tick(), "inherit or true/false. False freezes stand ticking/physics; intended for static decorations."),
+                d.overrideBool(p + ".armor-stands.collision-lookups", a.collisionLookups(), "inherit or true/false. False skips armor stand entity collision searches."),
+                d.overrideBool(p + ".armor-stands.movement", a.movement(), "inherit or true/false. False disables Purpur movement ticking, including gravity movement."),
+                d.overrideBool(p + ".armor-stands.water-movement", a.waterMovement(), "inherit or true/false. False disables fluid interaction for armor stands."),
+                d.overrideBool(p + ".armor-stands.gravity", a.gravity(), "inherit/true preserves normal gravity and per-entity NoGravity. False suppresses acceleration without rewriting entity NBT; existing momentum may remain.")),
+            new AntiXray(
+                d.overrideBool(p + ".anti-xray.enabled", x.enabled(), "inherit or true/false. Ore obfuscation adds work; this is protection, not a TPS optimization."),
+                d.overrideInt(p + ".anti-xray.engine-mode", x.engineMode(), 1, 3, "inherit or 1 hide, 2 obfuscate, 3 obfuscate layer. Applied before packet controller construction."),
+                d.overrideInt(p + ".anti-xray.max-block-height", x.maxBlockHeight(), -2032, 2032, "inherit or upper obfuscation height. Paper rounds to a section boundary."),
+                d.overrideInt(p + ".anti-xray.update-radius", x.updateRadius(), 0, 2, "inherit or 0..2 block reveal update radius."),
+                d.overrideBool(p + ".anti-xray.lava-obscures", x.lavaObscures(), "inherit or true/false. Treat lava as an obstruction."),
+                d.overrideBool(p + ".anti-xray.use-permission", x.usePermission(), "inherit or true/false. Enable the native anti-xray bypass permission. Block lists remain in paper-world.yml.")),
+            new Blocks(
+                d.overrideBool(p + ".blocks.block-entity-ticking", b.blockEntityTicking(), "inherit or true/false. False stops hoppers, furnaces and other block entities; unsuitable for survival."),
+                d.overrideInt(p + ".blocks.max-scheduled-block-ticks", b.maxBlockTicks(), 1, 1000000, "inherit or per-tick scheduled block budget. Native default 65536; lower values defer mechanics."),
+                d.overrideInt(p + ".blocks.max-scheduled-fluid-ticks", b.maxFluidTicks(), 1, 1000000, "inherit or per-tick scheduled fluid budget. Native default 65536; lower values delay fluid flow.")),
+            d.redstone(p + ".redstone.implementation", parent.redstone()),
+            d.overrideInt(p + ".saving.max-chunks-per-tick", parent.autoSaveChunks(), 1, 10000, "inherit or positive chunk autosave budget. Lower values spread saves over more ticks; autosave interval stays upstream-controlled."));
     }
 
     private static final class Document {
@@ -83,8 +172,8 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                     throw new InvalidConfigurationException(path + ": invalid or unsupported YAML", e);
                 }
             } else {
-                this.yaml.options().setHeader(List.of("QuantumSpigot Phase 1. All settings require a restart.",
-                    "No gameplay offload or adaptive simulation is enabled by this milestone."));
+                this.yaml.options().setHeader(List.of("QuantumSpigot. All settings require a restart.",
+                    "Explicit native tuning only; no asynchronous gameplay offload or adaptive simulation."));
             }
             this.integer("config-version", 1, 1, 1, "Configuration schema; newer versions must not be downgraded.");
         }
@@ -155,6 +244,38 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                 throw this.invalid(key, "a finite number in [" + min + ", " + max + "]");
             }
             return number.doubleValue();
+        }
+
+        private Boolean overrideBool(String key, Boolean parent, String comment) throws InvalidConfigurationException {
+            Object value = this.value(key, "inherit", comment);
+            if ("inherit".equals(value)) return parent;
+            if (!(value instanceof Boolean flag)) throw this.invalid(key, "inherit, true or false");
+            return flag;
+        }
+
+        private Integer overrideInt(String key, Integer parent, int min, int max, String comment) throws InvalidConfigurationException {
+            Object value = this.value(key, "inherit", comment);
+            if ("inherit".equals(value)) return parent;
+            if (!(value instanceof Integer number) || number < min || number > max) throw this.invalid(key, "inherit or an integer in [" + min + ", " + max + "]");
+            return number;
+        }
+
+        private Double rate(String key, String comment) throws InvalidConfigurationException {
+            Object value = this.value(key, "inherit", comment);
+            if ("inherit".equals(value)) return null;
+            if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())
+                || (number.doubleValue() != -1 && number.doubleValue() <= 0) || number.doubleValue() > 1000000) {
+                throw this.invalid(key, "inherit, -1 or a finite positive rate <= 1000000");
+            }
+            return number.doubleValue();
+        }
+
+        private String redstone(String key, String parent) throws InvalidConfigurationException {
+            String value = this.string(key, "inherit", "inherit, VANILLA, EIGENCRAFT or ALTERNATE_CURRENT. Optimized engines can change update order; check technical builds.");
+            if (value.equalsIgnoreCase("inherit")) return parent;
+            value = value.toUpperCase(Locale.ROOT);
+            if (!List.of("VANILLA", "EIGENCRAFT", "ALTERNATE_CURRENT").contains(value)) throw this.invalid(key, "inherit, VANILLA, EIGENCRAFT or ALTERNATE_CURRENT");
+            return value;
         }
 
         private InvalidConfigurationException invalid(String key, String expected) {

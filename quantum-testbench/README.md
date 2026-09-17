@@ -1,5 +1,29 @@
 # Quantum Testbench: local load tests
 
+## Configuration and command smoke test
+
+```powershell
+node quantum-testbench/scripts/tuning-smoke.mjs 'purpur-server/build/libs/quantumspigot-26.2-build.DEV.jar' 'C:\path\to\jdk-25\bin\java.exe' 'C:\server\eula.txt'
+```
+
+Requires an existing operator-accepted EULA file. Uses a temporary world and
+loopback port 25579; never opens the operator's world. Checks effective native
+settings, every diagnostic command, armor-stand gravity without rewriting
+NoGravity NBT, and safe-mode behavior across a save/restart. Saves both server
+logs and the temporary world for diagnosis, then stops the test process.
+This is functional verification, not a player-capacity benchmark.
+
+The driver also accepts `-Dquantum.arena-y=300` and
+`-Dquantum.arena-spacing=32` for a separately prepared, spread-out fixture.
+Default coordinates remain Y=160 and spacing=8. The controller must build and
+place players at the matching coordinates before creating `<output.json>.go`.
+Before that marker the clients are in setup, not an active workload.
+For an authorized loopback backend requiring Velocity forwarding, set
+`QUANTUM_FORWARDING_SECRET_FILE` to the existing secret file. The driver signs
+only its own `QTestNNN` profiles; it never prints the secret. Without that opt-in,
+the original offline fixture protocol is unchanged. Keep online authentication
+and forwarding validation enabled on the real network.
+
 The original idle smoke remains available. Active scenarios use native 26.2
 clients on an isolated Quantum server with **no added plugins**. This means
 Quantum/Purpur gameplay defaults, not the Mojang vanilla server executable.

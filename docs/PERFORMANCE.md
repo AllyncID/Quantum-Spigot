@@ -1,7 +1,10 @@
 # Performance status
 
-This is an instrumentation foundation. No improvement over Purpur has been
-demonstrated, and no gameplay optimization is enabled.
+No improvement over Purpur has been demonstrated. Quantum now exposes opt-in
+native tuning in `quantum-performance.yml`; it is disabled by default. Controls
+can reduce work by limiting chunk throughput or changing mechanics, but do not
+constitute new asynchronous tracking/pathfinding. See [configuration](CONFIGURATION.md)
+for per-option gameplay costs, inheritance and survival defaults.
 
 Local tuning and active-player measurements are tracked in the
 [2026-09-16 investigation](../benchmarks/results/2026-09-16-local-active.md).

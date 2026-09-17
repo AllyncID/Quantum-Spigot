@@ -8,6 +8,7 @@
 | Quantum foundation | Original work in this repository | MIT for new Quantum sources; does not relicense upstream | Phase 0/1 |
 | Quantum Paper integration | `purpur-server/paper-patches/features/0006-Quantum-identity-and-scheduler-diagnostics.patch` | Original MIT additions on the pinned base; preserve upstream notices | Reapplied successfully |
 | Quantum Minecraft integration | `purpur-server/minecraft-patches/features/0023-Quantum-runtime-and-tick-observability.patch` | Original MIT additions on the pinned base; preserve upstream notices | Reapplied successfully |
+| Quantum world tuning | `purpur-server/minecraft-patches/features/0024-Quantum-configurable-world-tuning.patch` | Original MIT hooks before world-controller creation and armor-stand gravity; no external fork implementation imported | Base-index apply check passed; compiled with server |
 | Pufferfish candidates | No commit imported | License/applicability/benchmark review required before any import | Not evaluated |
 
 The top-level MIT license does not mean the complete Minecraft server or all

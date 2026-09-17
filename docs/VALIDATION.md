@@ -88,3 +88,35 @@ Those are controlled localhost scenarios, not a release-stability guarantee.
 
 Do not advance to optimization patches or label this a stable release based
 on build success alone. Follow `benchmarks/README.md` for the runtime baseline.
+
+## Configurable tuning and command formatting — 2026-09-17
+
+Validated on the i3-12100F Windows localhost host with Microsoft JDK 25.0.3.9:
+
+* `:purpur-server:compileJava :purpur-server:test --tests 'dev.quantumspigot.*'`:
+  PASS, all 17 Quantum tests (configuration, messages and existing diagnostics).
+* `:purpur-server:test createPaperclipJar`: PASS; server suite reports 9288 tests,
+  22 skipped, **9266 passed, zero failures/errors**. The API suite was unchanged
+  and was not repeated for this update. The upstream `Slow` exclusion remains.
+* Minecraft feature patch 0024: index apply check against the generated base,
+  compilation and runtime world construction PASS.
+* `node --test quantum-testbench/scripts/metrics.test.mjs`: 5 passed, including
+  compatibility with the prefixed console telemetry. Smoke script syntax PASS.
+* `tuning-smoke.mjs`: isolated plugin-free world starts, runs diagnostic commands,
+  confirms global and per-dimension native settings, saves, and restarts in safe
+  mode. Hopper, redstone, armor stand, Anti-Xray, block budget and save settings
+  match the requested values; safe mode restores upstream values. These are
+  configuration checks, not farm timing or client-side ore-obfuscation tests.
+* Armor stand physics: disabled world gravity holds a normal stand in the air
+  without persisting `NoGravity`; after a save and safe-mode restart it falls.
+  An explicitly `NoGravity` stand retains its NBT and position across both runs.
+  Both shutdowns exit 0 and report all dimensions saved.
+
+Runnable artifact: `purpur-server/build/libs/quantumspigot-26.2-build.DEV.jar`.
+SHA-256: `AB7A89DB97B3AB2015973C8419E091707AFA79A830F018D99DF8AD46A622FAF2`.
+Its manifest names the pre-update commit `0688225`; use the checksum to identify
+this binary. Local smoke evidence is retained under
+`%TEMP%/quantum-tuning-dFzXzG/{tuned,safe}.log` on the test host.
+
+This update exposes existing native controls plus a small gravity policy hook.
+No new 200-player capacity measurement or TPS speedup is claimed for this build.

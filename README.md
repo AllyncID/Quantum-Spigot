@@ -14,6 +14,9 @@ region-aware plugin metadata is required.
 * Versioned, validated configuration with comments and migration backups.
 * Bounded tick history, MSPT histogram and exact rolling quantiles.
 * Permission-controlled `/quantum` diagnostics, lag incidents and slow sync tasks.
+* Colored command summaries and `/quantum config` for effective world settings.
+* Opt-in native hopper, redstone, armor-stand, Anti-Xray, chunk and block controls,
+  with per-dimension inheritance and a [survival preset](docs/examples/quantum-performance-survival.yml).
 * Bounded diagnostic IO with visible rejection/error counts.
 * A global budget for future Quantum workers, and a compatibility safe mode.
 * An isolated test plugin and repeatable baseline collection tools.

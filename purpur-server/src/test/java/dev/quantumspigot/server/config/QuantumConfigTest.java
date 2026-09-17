@@ -15,6 +15,9 @@ class QuantumConfigTest {
         var config = QuantumConfig.load(this.directory, true);
         assertEquals(QuantumConfig.Profile.COMPATIBILITY, config.profile());
         assertEquals(900, config.diagnostics().historySeconds());
+        assertTrue(config.coloredCommands());
+        assertFalse(config.performanceActive());
+        assertEquals(QuantumConfig.WorldTuning.INHERIT, config.worldTuning("minecraft:overworld"));
         assertEquals(QuantumConfig.Profile.BALANCED, QuantumConfig.load(this.directory, false).profile());
         assertTrue(Files.readString(this.directory.resolve("quantum-global.yml")).contains("#"));
     }
@@ -75,6 +78,63 @@ class QuantumConfigTest {
         try (var files = Files.list(this.directory)) {
             Path backup = files.filter(path -> path.toString().endsWith(".bak")).findFirst().orElseThrow();
             assertEquals(original, Files.readString(backup));
+        }
+    }
+
+    @Test
+    void performanceOverridesInheritPerWorldAndSafeModeBypassesWithoutRewriting() throws Exception {
+        Path file = this.directory.resolve("quantum-performance.yml");
+        Files.writeString(file, """
+            enabled: true
+            chunks:
+              generate-per-second: 20.0
+              concurrent-generates: 1
+            world-defaults:
+              hopper:
+                check-ticks: 4
+              armor-stands:
+                gravity: false
+              redstone:
+                implementation: alternate_current
+            worlds:
+              minecraft:the_nether:
+                hopper:
+                  check-ticks: 8
+                armor-stands:
+                  gravity: true
+            """);
+        var config = QuantumConfig.load(this.directory, false);
+        assertTrue(config.performanceActive());
+        assertEquals(4, config.worldTuning("minecraft:overworld").hopper().checkTicks());
+        assertEquals(8, config.worldTuning("minecraft:the_nether").hopper().checkTicks());
+        assertNull(config.worldTuning("minecraft:the_end").hopper().amount());
+        assertEquals("ALTERNATE_CURRENT", config.worldTuning("minecraft:the_end").redstone());
+        assertEquals(false, config.worldTuning("minecraft:overworld").armorStands().gravity());
+        assertEquals(true, config.worldTuning("minecraft:the_nether").armorStands().gravity());
+        String saved = Files.readString(file);
+        var safe = QuantumConfig.load(this.directory, true);
+        assertFalse(safe.performanceActive());
+        assertEquals(QuantumConfig.WorldTuning.INHERIT, safe.worldTuning("minecraft:the_nether"));
+        assertEquals(saved, Files.readString(file));
+        Files.writeString(this.directory.resolve("quantum-global.yml"), "profile:\n  active: compatibility\n");
+        assertFalse(QuantumConfig.load(this.directory, false).performanceActive());
+    }
+
+    @Test
+    void invalidPerformanceSettingsDoNotWriteOtherDefaults() throws Exception {
+        Path file = this.directory.resolve("quantum-performance.yml");
+        for (String invalid : new String[] {
+            "chunks:\n  generate-per-second: 0\n", "chunks:\n  send-per-second: .inf\n",
+            "world-defaults:\n  hopper:\n    transfer-ticks: 0\n",
+            "world-defaults:\n  armor-stands:\n    gravity: 'false'\n",
+            "world-defaults:\n  anti-xray:\n    engine-mode: 4\n",
+            "world-defaults:\n  redstone:\n    implementation: turbo\n",
+            "worlds: [minecraft:overworld]\n", "worlds:\n  world: {}\n"
+        }) {
+            Files.writeString(file, invalid);
+            assertThrows(InvalidConfigurationException.class, () -> QuantumConfig.load(this.directory, false), invalid);
+            assertEquals(invalid, Files.readString(file));
+            assertFalse(Files.exists(this.directory.resolve("quantum-global.yml")));
         }
     }
 }

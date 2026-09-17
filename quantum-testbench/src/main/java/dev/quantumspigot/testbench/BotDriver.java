@@ -7,6 +7,12 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,6 +71,8 @@ import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.level.Serve
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerPosRotPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerRotPacket;
 import org.geysermc.mcprotocollib.protocol.packet.login.clientbound.ClientboundLoginFinishedPacket;
+import org.geysermc.mcprotocollib.protocol.packet.login.clientbound.ClientboundCustomQueryPacket;
+import org.geysermc.mcprotocollib.protocol.packet.login.serverbound.ServerboundCustomQueryAnswerPacket;
 
 /** Loopback-only protocol driver. Mixed movement requires the runner's flat arena fixture. */
 public final class BotDriver {
@@ -75,6 +83,9 @@ public final class BotDriver {
     private static volatile boolean stopping;
     private static volatile boolean active;
     private static String profile = "idle";
+    private static byte[] forwardingSecret;
+    private static final int ARENA_Y = Integer.getInteger("quantum.arena-y", 160);
+    private static final int ARENA_SPACING = Integer.getInteger("quantum.arena-spacing", 8);
     private static final Map<String, AtomicLong> ACTIONS = new ConcurrentHashMap<>();
     private static void count(String action) { ACTIONS.computeIfAbsent(action, ignored -> new AtomicLong()).incrementAndGet(); }
     private static Map<String, Long> actions() {
@@ -103,6 +114,13 @@ public final class BotDriver {
             throw new IllegalArgumentException("Port, count or duration outside allowed range");
         }
         Path output = Path.of(args[3]).toAbsolutePath();
+        if (ARENA_Y < 80 || ARENA_Y > 310) throw new IllegalArgumentException("Arena Y must be 80..310");
+        if (ARENA_SPACING < 8 || ARENA_SPACING > 64) throw new IllegalArgumentException("Arena spacing must be 8..64");
+        String secretFile = System.getenv("QUANTUM_FORWARDING_SECRET_FILE");
+        if (secretFile != null) {
+            forwardingSecret = Files.readString(Path.of(secretFile)).trim().getBytes(StandardCharsets.UTF_8);
+            if (forwardingSecret.length < 32) throw new IllegalArgumentException("Forwarding secret must be at least 32 bytes");
+        }
         if (Files.exists(output)) throw new IllegalArgumentException("Refusing to overwrite an existing result");
         Files.createDirectories(output.getParent());
         List<Bot> bots = new ArrayList<>();
@@ -195,9 +213,9 @@ public final class BotDriver {
 
         private Bot(int index, int port) throws Exception {
             this.index = index;
-            this.homeX = (index % 20) * 8 + 4.5;
-            this.homeZ = (index / 20) * 8 + 4.5;
-            this.block = Vector3i.from((int) homeX + 2, 160, (int) homeZ);
+            this.homeX = (index % 20) * ARENA_SPACING + 4.5;
+            this.homeZ = (index / 20) * ARENA_SPACING + 4.5;
+            this.block = Vector3i.from((int) homeX + 2, ARENA_Y, (int) homeZ);
             this.name = String.format(java.util.Locale.ROOT, "QTest%03d", index + 1);
             this.session = ClientNetworkSessionFactory.factory()
                 .setRemoteSocketAddress(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), port))
@@ -209,7 +227,13 @@ public final class BotDriver {
 
         @Override public synchronized void packetReceived(Session session, Packet packet) {
             RECEIVED.incrementAndGet();
-            if (packet instanceof ClientboundLoginFinishedPacket) {
+            if (packet instanceof ClientboundCustomQueryPacket query) {
+                try {
+                    byte[] answer = forwardingSecret != null && query.getChannel().asString().equals("velocity:player_info")
+                        ? forwarding(this.name) : null;
+                    session.send(new ServerboundCustomQueryAnswerPacket(query.getMessageId(), answer));
+                } catch (Exception e) { session.disconnect(Component.text("Unable to sign local test profile"), e); }
+            } else if (packet instanceof ClientboundLoginFinishedPacket) {
                 session.send(new ServerboundClientInformationPacket("en_us", 6, ChatVisibility.FULL, true,
                     List.of(), HandPreference.RIGHT_HAND, false, true, ParticleStatus.MINIMAL));
             } else if (packet instanceof ClientboundLoginPacket login) {
@@ -302,10 +326,10 @@ public final class BotDriver {
                     double distance = Math.hypot(dx, dz);
                     double speed = role % 2 == 0 ? .26 : .20;
                     if (distance > .001) { x += dx / distance * Math.min(speed, distance); z += dz / distance * Math.min(speed, distance); }
-                    if (step % 100 == 0 && y <= 160.001) { verticalSpeed = .42; count("jumps"); }
+                    if (step % 100 == 0 && y <= ARENA_Y + .001) { verticalSpeed = .42; count("jumps"); }
                     y += verticalSpeed;
                     verticalSpeed = (verticalSpeed - .08) * .98;
-                    if (y <= 160) { y = 160; verticalSpeed = 0; } else grounded = false;
+                    if (y <= ARENA_Y) { y = ARENA_Y; verticalSpeed = 0; } else grounded = false;
                     if (!sprinting && role % 2 == 0) {
                         session.send(new ServerboundPlayerCommandPacket(entityId, PlayerState.START_SPRINTING)); sprinting = true;
                     }
@@ -348,5 +372,22 @@ public final class BotDriver {
                 session.send(new ServerboundChatCommandPacket("list")); count("commands");
             }
         }
+    }
+
+    /** Velocity v1 for loopback test profiles only; the server's signature validation remains enabled. */
+    private static byte[] forwarding(String name) throws Exception {
+        if (!name.matches("QTest[0-9]{3}")) throw new IllegalArgumentException("Not a test profile");
+        UUID id = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        DataOutputStream data = new DataOutputStream(bytes);
+        data.writeByte(1); // Forwarding version, followed by two short ASCII strings (one-byte VarInt lengths).
+        data.writeByte(9); data.writeBytes("127.0.0.1");
+        data.writeLong(id.getMostSignificantBits()); data.writeLong(id.getLeastSignificantBits());
+        data.writeByte(name.length()); data.writeBytes(name); data.writeByte(0); // No skin properties.
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(forwardingSecret, "HmacSHA256"));
+        byte[] payload = bytes.toByteArray();
+        bytes.reset(); bytes.write(mac.doFinal(payload)); bytes.write(payload);
+        return bytes.toByteArray();
     }
 }

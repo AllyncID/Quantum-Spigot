@@ -51,6 +51,9 @@ test('26.2 TPS windows cannot mistake a recovered 5-second value for 1 minute', 
   const fixed = parseMetric('TPS (upstream) 5s 20.00 | 1m 17.10 | 5m 18.38 | 15m 19.10');
   assert.equal(fixed.oneMinute, 17.1);
   assert.equal(fixed.fifteenMinutes, 19.1);
+  assert.deepEqual(parseMetric('[Quantum] TPS (upstream) 5s 20.00 | 1m 17.10 | 5m 18.38 | 15m 19.10'), fixed);
+  assert.equal(parseMetric('  Loaded chunks: 42').loaded, 42);
+  assert.equal(parseMetric('[Quantum] Heap: used = 1048576 committed = 2097152 max = 6291456').usedBytes, 1048576);
 });
 
 test('absent bots, missing metrics and abnormal shutdown cannot pass', () => {

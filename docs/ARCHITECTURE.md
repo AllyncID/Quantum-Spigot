@@ -1,7 +1,7 @@
 # QuantumSpigot foundation
 
-Scope: Phase 0 (bootstrap) and Phase 1 (instrumentation). No gameplay or
-network optimizations are enabled by this milestone. The supplied master
+Scope: bootstrap, instrumentation and explicit native performance controls.
+Performance overrides are opt-in and disabled by default. The supplied master
 specification is a roadmap, not a statement of implemented features.
 
 ## Repository and branches
@@ -42,11 +42,13 @@ validate, preserving existing values, unknown keys, and comments. Back up
 existing files before rewriting them and replace through a same-directory
 temporary file. Future schema versions are rejected rather than downgraded.
 
-Phase 1 exposes only implemented diagnostics, profile, and budget settings.
-The remaining files from the master specification belong to later phases;
-shipping switches that do nothing would mislead administrators. Compatibility
-and balanced currently share unchanged Purpur simulation. Safe mode selects
-compatibility and leaves diagnostics available. No executor hot reload.
+Configuration exposes diagnostics, profile, worker budget, command colors and
+implemented performance overrides. Global chunk/Spark values are applied at
+Quantum initialization. World values are applied in the Level constructor after
+native configuration loads and before Anti-Xray/entity state captures it. Armor
+stand gravity is a cached world flag read by the native gravity method; entity
+NBT is preserved. There is no YAML access in the tick path. Compatibility and
+safe mode bypass tuning and leave diagnostics available. No executor hot reload.
 
 ## Measurement boundaries
 

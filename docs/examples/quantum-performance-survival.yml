@@ -1,0 +1,49 @@
+# Copy to config/quantum/quantum-performance.yml, then restart.
+# Native settings are reused; no asynchronous entity simulation is enabled.
+config-version: 1
+enabled: true
+profiling:
+  # Measured profiler stalls on this Windows host. External Spark plugins are unaffected.
+  disable-bundled-spark: true
+chunks:
+  # Per player, not a global server budget. Slower generation can delay exploration.
+  generate-per-second: 20.0
+  load-per-second: 75.0
+  send-per-second: 50.0
+  concurrent-generates: 1
+  concurrent-loads: 0
+world-defaults:
+  hopper:
+    transfer-ticks: 8
+    check-ticks: 1
+    amount: 1
+    cooldown-when-full: true
+    disable-move-event: false
+    ignore-occluding-blocks: false
+  redstone:
+    # EIGENCRAFT / ALTERNATE_CURRENT are opt-in; they can change update order.
+    implementation: VANILLA
+  armor-stands:
+    # Keep normal survival physics. Disable selectively for a decoration-only world.
+    tick: true
+    collision-lookups: true
+    movement: true
+    water-movement: true
+    gravity: true
+  anti-xray:
+    # Protection costs CPU; enable deliberately. Detailed block lists stay in Paper config.
+    enabled: inherit
+    engine-mode: inherit
+    max-block-height: inherit
+    update-radius: inherit
+    lava-obscures: inherit
+    use-permission: inherit
+  blocks:
+    block-entity-ticking: true
+    max-scheduled-block-ticks: 65536
+    max-scheduled-fluid-ticks: 65536
+  saving:
+    max-chunks-per-tick: 8
+# Keys identify dimensions, e.g. minecraft:overworld, minecraft:the_nether.
+# Missing/inherit entries use world-defaults; inherit there uses upstream config.
+worlds: {}

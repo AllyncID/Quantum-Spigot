@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: QuantumSpigot contributors <noreply@quantumspigot.invalid>
+Date: Wed, 16 Sep 2026 23:50:00 +0800
+Subject: [PATCH] Quantum configurable world tuning
+
+Apply native overrides before world controllers capture their configuration.
+Armor stand gravity policy changes acceleration without changing entity NBT.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/net/minecraft/world/entity/decoration/ArmorStand.java b/net/minecraft/world/entity/decoration/ArmorStand.java
+index 235c2ac..7a97ac6 100644
+--- a/net/minecraft/world/entity/decoration/ArmorStand.java
++++ b/net/minecraft/world/entity/decoration/ArmorStand.java
+@@ -133,6 +133,12 @@ public class ArmorStand extends LivingEntity {
+         return !this.isMarker() && !this.isNoGravity();
+     }
+ 
++    @Override
++    protected double getDefaultGravity() {
++        // Quantum - preserve NoGravity NBT/API and existing velocity; only suppress gravitational acceleration.
++        return this.level().quantumArmorStandGravity ? super.getDefaultGravity() : 0.0;
++    }
++
+     @Override
+     public boolean isEffectiveAi() {
+         return super.isEffectiveAi() && this.hasPhysics();
+diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
+index bad7d3d..759efdd 100644
+--- a/net/minecraft/world/level/Level.java
++++ b/net/minecraft/world/level/Level.java
+@@ -173,6 +173,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+     // Paper end - add paper world config
+ 
+     public final org.purpurmc.purpur.PurpurWorldConfig purpurConfig; // Purpur - Purpur config files
++    public final boolean quantumArmorStandGravity; // Quantum - cached per-world policy; never rewrites entity NBT
+     public static @Nullable BlockPos lastPhysicsProblem; // Spigot
+     public final Map<ServerExplosion.CacheKey, Float> explosionDensityCache = new java.util.HashMap<>(); // Paper - Optimize explosions
+     public java.util.ArrayDeque<net.minecraft.world.level.block.RedstoneTorchBlock.Toggle> redstoneUpdateInfos; // Paper - Faster redstone torch rapid clock removal; Move from Map in BlockRedstoneTorch to here
+@@ -898,6 +899,9 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+         this.spigotConfig = new org.spigotmc.SpigotWorldConfig(bukkitName, worldKey); // Spigot
+         this.paperConfig = paperWorldConfigCreator.apply(this.spigotConfig); // Paper - create paper world config
+         this.purpurConfig = new org.purpurmc.purpur.PurpurWorldConfig(bukkitName, environment, worldKey); // Purpur - Purpur config files
++        // Quantum - apply before Anti-Xray and entity constructors capture their configuration.
++        this.quantumArmorStandGravity = dev.quantumspigot.server.QuantumRuntime.configureWorld(
++            worldKey.asString(), this.paperConfig, this.spigotConfig, this.purpurConfig);
+         this.playerBreedingCooldowns = this.getNewBreedingCooldownCache(); // Purpur - Add adjustable breeding cooldown to config
+         this.generator = generator;
+         this.world = new CraftWorld((ServerLevel) this, worldKey, biomeProvider, environment);
