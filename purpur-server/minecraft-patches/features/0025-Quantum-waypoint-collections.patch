@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Thu, 17 Sep 2026 17:00:00 +0800
+Subject: [PATCH] Reduce waypoint collection overhead behind a world opt-in
+
+Keep upstream connection ordering, callbacks, visibility and update cadence.
+Use the existing Guava table with directly readable backing rows and list
+snapshots instead of hashing a set of already unique map entries.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/minecraft/server/waypoints/ServerWaypointManager.java
+index b9748a3..fcf9f88 100644
+--- a/net/minecraft/server/waypoints/ServerWaypointManager.java
++++ b/net/minecraft/server/waypoints/ServerWaypointManager.java
+@@ -18,12 +18,19 @@ import net.minecraft.world.waypoints.WaypointTransmitter;
+ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+     private final Set<WaypointTransmitter> waypoints = new HashSet<>();
+     private final Set<ServerPlayer> players = new HashSet<>();
+-    private final Table<ServerPlayer, WaypointTransmitter, WaypointTransmitter.Connection> connections = HashBasedTable.create();
++    private final Table<ServerPlayer, WaypointTransmitter, WaypointTransmitter.Connection> connections;
++    private final Map<ServerPlayer, Map<WaypointTransmitter, WaypointTransmitter.Connection>> quantumConnectionRows;
+     // Paper start - optimize ServerWaypointManager with locator bar disabled
+     public boolean locatorBarEnabled; // Avoid a gamerule lookup for each player
++    public final boolean quantumWaypointCollections; // Quantum - startup policy, no gameplay offload
+ 
+     public ServerWaypointManager(net.minecraft.server.level.ServerLevel serverLevel) {
+         this.locatorBarEnabled = serverLevel.getGameRules().get(GameRules.LOCATOR_BAR);
++        this.quantumWaypointCollections = dev.quantumspigot.server.QuantumRuntime.waypointCollections(serverLevel.dimension().identifier().toString());
++        // Same linked row/column ordering as HashBasedTable; only the table mutates this backing map.
++        this.quantumConnectionRows = this.quantumWaypointCollections ? new java.util.LinkedHashMap<>() : null;
++        this.connections = this.quantumWaypointCollections
++            ? Tables.newCustomTable(this.quantumConnectionRows, java.util.LinkedHashMap::new) : HashBasedTable.create();
+     }
+     // Paper end - optimize ServerWaypointManager with locator bar disabled
+ 
+@@ -41,6 +48,17 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitte
+     public void updateWaypoint(final WaypointTransmitter waypoint) {
+         if (!this.locatorBarEnabled) return; // Paper - optimize ServerWaypointManager with locator bar disabled
+         if (this.waypoints.contains(waypoint)) {
++            // Quantum - retain snapshot callbacks and the live retry of broken/removed connections.
++            if (this.quantumWaypointCollections) {
++                for (var entry : new java.util.ArrayList<>(this.connections.column(waypoint).entrySet())) {
++                    this.updateConnection(entry.getKey(), waypoint, entry.getValue());
++                }
++                for (ServerPlayer player : this.players) {
++                    var row = this.quantumConnectionRows.get(player);
++                    if (row == null || !row.containsKey(waypoint)) this.createConnection(player, waypoint);
++                }
++                return;
++            }
+             Map<ServerPlayer, WaypointTransmitter.Connection> playerConnection = Tables.transpose(this.connections).row(waypoint);
+             SetView<ServerPlayer> potentialPlayers = Sets.difference(this.players, playerConnection.keySet());
+ 
+@@ -77,6 +95,17 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitte
+ 
+     public void updatePlayer(final ServerPlayer player) {
+         if (!this.locatorBarEnabled) return; // Paper - optimize ServerWaypointManager with locator bar disabled
++        // Quantum - no set hashing for an already unique entry set; avoid transient Guava row views.
++        if (this.quantumWaypointCollections) {
++            for (var entry : new java.util.ArrayList<>(this.connections.row(player).entrySet())) {
++                this.updateConnection(player, entry.getKey(), entry.getValue());
++            }
++            for (WaypointTransmitter waypoint : this.waypoints) {
++                var row = this.quantumConnectionRows.get(player);
++                if (row == null || !row.containsKey(waypoint)) this.createConnection(player, waypoint);
++            }
++            return;
++        }
+         Map<WaypointTransmitter, WaypointTransmitter.Connection> waypointConnections = this.connections.row(player);
+         SetView<WaypointTransmitter> potentialWaypoints = Sets.difference(this.waypoints, waypointConnections.keySet());
+ 

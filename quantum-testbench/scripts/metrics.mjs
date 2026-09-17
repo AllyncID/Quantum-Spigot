@@ -14,6 +14,10 @@ export function parseMetric(line) {
     p75: Number(mspt[4]), p95: Number(mspt[5]), p99: Number(mspt[6]), max: Number(mspt[7]), last: Number(mspt[8]), samples: Number(mspt[9]), coverageSeconds: Number(mspt[10]) };
   const chunks = text.match(/Loaded chunks: (\d+)/);
   if (chunks) return {kind: 'chunks', loaded: Number(chunks[1])};
+  const queues = text.match(/Waiting (load|generation|send): (\d+)\s*\|\s*(Loading|Generating|Waiting ticking): (\d+)/);
+  if (queues) return {kind: 'chunk-queue', queue: queues[1], waiting: Number(queues[2]), companion: queues[3], companionCount: Number(queues[4])};
+  const position = text.match(/(QTest\d+) has the following entity data: \[([-\d.Ee+]+)d, ([-\d.Ee+]+)d, ([-\d.Ee+]+)d\]/);
+  if (position) return {kind: 'server-position', player: position[1], x: Number(position[2]), y: Number(position[3]), z: Number(position[4])};
   const entities = text.match(/Loaded entities: (\d+)/);
   if (entities) return {kind: 'entities', loaded: Number(entities[1])};
   const heap = text.match(/Heap:.*used = (\d+).*committed = (\d+).*max = (\d+)/);

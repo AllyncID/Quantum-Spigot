@@ -90,6 +90,8 @@ class QuantumConfigTest {
               generate-per-second: 20.0
               concurrent-generates: 1
             world-defaults:
+              experimental:
+                waypoint-collections: true
               hopper:
                 check-ticks: 4
               armor-stands:
@@ -98,6 +100,8 @@ class QuantumConfigTest {
                 implementation: alternate_current
             worlds:
               minecraft:the_nether:
+                experimental:
+                  waypoint-collections: false
                 hopper:
                   check-ticks: 8
                 armor-stands:
@@ -105,6 +109,8 @@ class QuantumConfigTest {
             """);
         var config = QuantumConfig.load(this.directory, false);
         assertTrue(config.performanceActive());
+        assertEquals(true, config.worldTuning("minecraft:overworld").waypointCollections());
+        assertEquals(false, config.worldTuning("minecraft:the_nether").waypointCollections());
         assertEquals(4, config.worldTuning("minecraft:overworld").hopper().checkTicks());
         assertEquals(8, config.worldTuning("minecraft:the_nether").hopper().checkTicks());
         assertNull(config.worldTuning("minecraft:the_end").hopper().amount());
@@ -127,6 +133,7 @@ class QuantumConfigTest {
             "chunks:\n  generate-per-second: 0\n", "chunks:\n  send-per-second: .inf\n",
             "world-defaults:\n  hopper:\n    transfer-ticks: 0\n",
             "world-defaults:\n  armor-stands:\n    gravity: 'false'\n",
+            "world-defaults:\n  experimental:\n    waypoint-collections: 'true'\n",
             "world-defaults:\n  anti-xray:\n    engine-mode: 4\n",
             "world-defaults:\n  redstone:\n    implementation: turbo\n",
             "worlds: [minecraft:overworld]\n", "worlds:\n  world: {}\n"

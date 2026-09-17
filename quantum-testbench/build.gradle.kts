@@ -15,4 +15,8 @@ application {
     mainClass = "dev.quantumspigot.testbench.BotDriver"
     applicationDefaultJvmArgs = listOf("-Xms128M", "-Xmx2G", "-Dio.netty.eventLoopThreads=4")
 }
-dependencyLocking { lockAllConfigurations() }
+dependencyLocking {
+    lockAllConfigurations()
+    // Timestamp-pinned above; its Maven POM reports the base SNAPSHOT version.
+    ignoredDependencies.add("org.geysermc.mcprotocollib:protocol")
+}

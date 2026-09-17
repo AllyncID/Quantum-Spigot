@@ -25,7 +25,9 @@ if (mode === 'prepare') {
   if (scenario?.allocator && !['adaptive', 'pooled'].includes(scenario.allocator)) throw Error('Unknown allocator');
   const viewDistance = scenario?.viewDistance ?? 6, simulationDistance = scenario?.simulationDistance ?? 4;
   if (![viewDistance, simulationDistance].every(n => Number.isInteger(n) && n >= 2 && n <= 16)) throw Error('Distances must be 2..16');
-  const jar = path.join(repository, scenario?.server === 'purpur' ? 'artifacts/purpur-26.2-baseline.jar' : 'artifacts/quantumspigot-26.2-build.DEV.jar');
+  const jar = scenario?.jar ? path.resolve(scenario.jar) : path.join(repository, scenario?.server === 'purpur' ? 'artifacts/purpur-26.2-baseline.jar' : 'artifacts/quantumspigot-26.2-build.DEV.jar');
+  const arenaY = scenario?.arenaY ?? 160, arenaSpacing = scenario?.arenaSpacing ?? 8;
+  if (!Number.isInteger(arenaY) || arenaY < 80 || arenaY > 310 || !Number.isInteger(arenaSpacing) || arenaSpacing < 8 || arenaSpacing > 64) throw Error('Invalid arena bounds');
   if (scenario && (!Array.isArray(scenario.stages) || !scenario.stages.length || scenario.stages.some(s =>
     !Number.isInteger(s.players) || s.players < 1 || s.players > 300 || !Number.isInteger(s.seconds)
     || s.seconds < 60 || s.seconds > 1800 || !['mixed', 'explore'].includes(s.profile)))) throw Error('Invalid local scenario');
@@ -38,8 +40,14 @@ if (mode === 'prepare') {
   fs.cpSync(path.join(bench, 'scripts'), path.join(directory, 'sources/scripts'), {recursive: true});
   fs.copyFileSync(path.join(bench, 'src/main/java/dev/quantumspigot/testbench/BotDriver.java'), path.join(directory, 'sources/BotDriver.java'));
   fs.copyFileSync(jar, path.join(directory, 'server.jar'));
+  if (scenario?.worldDirectory) fs.cpSync(path.resolve(scenario.worldDirectory), path.join(directory, 'world'), {recursive: true});
+  if (scenario?.waypointCollections !== undefined) {
+    if (typeof scenario.waypointCollections !== 'boolean') throw Error('waypointCollections must be boolean');
+    fs.mkdirSync(path.join(directory, 'config/quantum'), {recursive: true});
+    fs.writeFileSync(path.join(directory, 'config/quantum/quantum-performance.yml'), `enabled: true\nworld-defaults:\n  experimental:\n    waypoint-collections: ${scenario.waypointCollections}\n`);
+  }
   if (scenario?.sparkEnabled === false) {
-    fs.mkdirSync(path.join(directory, 'config'));
+    fs.mkdirSync(path.join(directory, 'config'), {recursive: true});
     fs.writeFileSync(path.join(directory, 'config/paper-global.yml'), '_version: 31\nspark:\n  enabled: false\n  enable-immediately: false\n');
   }
   const vanilla = path.join(repository, 'run/cli-smoke/cache/mojang_26.2.jar');
@@ -58,6 +66,8 @@ if (mode === 'prepare') {
     heap: {initial: '1G', maximum: '6G'}, plugins: [], worldSeed: 728194, viewDistance, simulationDistance,
     network: 'loopback; server and bots share one host; offline-mode authentication is not measured',
     stages: scenario?.stages ?? [{players: 1, seconds: 60}, {players: 20, seconds: 120}], idleSeconds: 60,
+    arenaY, arenaSpacing, worldDirectory: scenario?.worldDirectory ?? null,
+    waypointCollections: scenario?.waypointCollections ?? false, jfr: scenario?.jfr !== false,
     performance: !!scenario, warmupSeconds: scenario ? 60 : 0,
     server: scenario?.server ?? 'quantum', nativeMetrics: !!scenario?.nativeMetrics,
     allocator: scenario?.allocator ?? 'adaptive',
@@ -79,6 +89,8 @@ if (mode === 'prepare') {
 async function run(directory) {
   if (!directory.startsWith(path.resolve(runsRoot) + path.sep)) throw Error('Only a prepared test directory inside runsRoot is allowed');
   const config = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'));
+  config.arenaY ??= 160;
+  config.arenaSpacing ??= 8;
   if (config.status !== 'PREPARED_NOT_RUN' || config.directory !== directory || fs.existsSync(path.join(directory, 'result.json'))) throw Error('Prepare a fresh run');
   if (config.host !== '127.0.0.1' || config.plugins.length || config.stages.some(s => s.players < 1 || s.players > 300)) throw Error('Local scope: loopback, no plugins, at most 300 bots');
   if (!/^eula\s*=\s*true\s*$/mi.test(fs.readFileSync(path.join(directory, 'eula.txt'), 'utf8'))) throw Error('Minecraft EULA has not been accepted by the operator; no server was started');
@@ -98,7 +110,7 @@ async function run(directory) {
   let phase = 'startup', serverReady = false, serverExit, stopping = false, bot, monitor, stageStarted = Date.now(), badSamples = 0;
   let activeStarted, activePhase;
   let previousCpu = os.cpus(), latestTps, latestMspt;
-  const args = ['-Xms1G', '-Xmx6G', '-XX:StartFlightRecording=filename=server.jfr,settings=profile,dumponexit=true,maxsize=256m',
+  const args = ['-Xms1G', '-Xmx6G', ...(config.jfr === false ? [] : ['-XX:StartFlightRecording=filename=server.jfr,settings=profile,dumponexit=true,maxsize=256m']),
     `-Dio.netty.allocator.type=${config.allocator ?? 'adaptive'}`,
     '-Xlog:safepoint=info:file=safepoints.log:time,uptime,level',
     '-Dterminal.ansi=false', '-jar', 'server.jar', '--nogui', '--nojline'];
@@ -138,6 +150,8 @@ async function run(directory) {
     else badSamples = 0;
     if (badSamples >= 4) fatalErrors.push('Sustained TPS below 18 or rolling p99 above 100 ms');
     command(config.nativeMetrics ? 'tps\nmspt\nlist' : 'quantum tps\nquantum chunks\nquantum entities\nquantum gc\nlist');
+    // Server-owned position samples prove motion is being processed, not merely transmitted.
+    if (activeStarted) for (const name of ['QTest002', 'QTest052', 'QTest102', 'QTest152']) command(`data get entity ${name} Pos`);
   };
   const interrupted = () => fatalErrors.push('Operator interrupted test');
   process.on('SIGINT', interrupted); process.on('SIGTERM', interrupted);
@@ -158,14 +172,16 @@ async function run(directory) {
     if (config.locatorBar === false) command('gamerule minecraft:locator_bar false');
     if (config.performance) {
       phase = 'arena-setup';
-      command('forceload add -16 -16 176 144');
+      const count = Math.max(...config.stages.map(s => s.players));
+      for (let i = 0; i < count; i++) command(`forceload add ${i % 20 * config.arenaSpacing} ${Math.floor(i / 20) * config.arenaSpacing}`);
       await healthyWait(15_000);
-      for (let x = -4; x <= 164; x += 20) {
-        command(`fill ${x} 159 -4 ${Math.min(164, x + 19)} 159 124 minecraft:stone`);
-        command(`fill ${x} 160 -4 ${Math.min(164, x + 19)} 166 124 minecraft:air`);
-        await healthyWait(100);
+      for (let i = 0; i < count; i++) {
+        const x = i % 20 * config.arenaSpacing, z = Math.floor(i / 20) * config.arenaSpacing, y = config.arenaY;
+        command(`fill ${x} ${y - 1} ${z} ${x + 7} ${y - 1} ${z + 7} minecraft:stone`);
+        command(`fill ${x} ${y} ${z} ${x + 7} ${y + 6} ${z + 7} minecraft:air`);
+        await healthyWait(30);
       }
-      command('setworldspawn 4 160 4\ntime set day');
+      command(`setworldspawn 4 ${config.arenaY} 4\ntime set day`);
       await healthyWait(5000);
     }
     phase = 'idle'; stageStarted = Date.now();
@@ -179,7 +195,8 @@ async function run(directory) {
       const file = path.join(directory, activePhase + '.json');
       console.log('START_STAGE ' + phase);
       const botLog = fs.createWriteStream(path.join(directory, activePhase + '.jsonl'));
-      bot = spawn(config.java, ['-Xms128M', '-Xmx2G', '-Dio.netty.eventLoopThreads=4', '-cp', path.join(config.driverLibraries, '*'),
+      bot = spawn(config.java, ['-Xms128M', '-Xmx2G', '-Dio.netty.eventLoopThreads=4', '-Dio.netty.allocator.type=pooled',
+        `-Dquantum.arena-y=${config.arenaY}`, `-Dquantum.arena-spacing=${config.arenaSpacing}`, '-cp', path.join(config.driverLibraries, '*'),
         'dev.quantumspigot.testbench.BotDriver', String(config.port), String(stage.players), String(stage.seconds + (config.warmupSeconds ?? 0)), file, stage.profile ?? 'idle', String(config.warmupSeconds ?? 0)],
         {cwd: directory, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']});
       let botExit;
@@ -239,17 +256,17 @@ async function run(directory) {
   async function setupPlayers(stage, file) {
     command('kill @e[type=minecraft:zombie]\nclear @a');
     for (let i = 0; i < stage.players; i++) {
-      const name = 'QTest' + String(i + 1).padStart(3, '0'), x = i % 20 * 8 + 4, z = Math.floor(i / 20) * 8 + 4;
+      const name = 'QTest' + String(i + 1).padStart(3, '0'), x = i % 20 * config.arenaSpacing + 4, z = Math.floor(i / 20) * config.arenaSpacing + 4, y = config.arenaY;
       const role = i % 10;
       command(`gamemode ${stage.profile === 'explore' ? 'creative' : 'survival'} ${name}`);
-      command(`tp ${name} ${x + .5} ${stage.profile === 'explore' ? 240 : 160} ${z + .5}`);
+      command(`tp ${name} ${x + .5} ${stage.profile === 'explore' ? 240 : y} ${z + .5}`);
       command(`effect give ${name} minecraft:saturation infinite 0 true`);
       if (stage.profile === 'mixed') {
-        command(`setblock ${x + 2} 160 ${z} ${role === 9 ? 'minecraft:chest' : 'minecraft:air'}`);
+        command(`setblock ${x + 2} ${y} ${z} ${role === 9 ? 'minecraft:chest' : 'minecraft:air'}`);
         if (role === 6 || role === 7) {
           command(`item replace entity ${name} hotbar.0 with minecraft:dirt 64\nitem replace entity ${name} hotbar.1 with minecraft:diamond_shovel`);
         }
-        if (role === 8) command(`summon minecraft:zombie ${x + 2.5} 160 ${z + .5} {NoAI:1b,Silent:1b,PersistenceRequired:1b,Health:1000f,attributes:[{id:"minecraft:max_health",base:1000.0},{id:"minecraft:knockback_resistance",base:1.0}],ArmorItems:[{},{},{},{id:"minecraft:iron_helmet",count:1}]}`);
+        if (role === 8) command(`summon minecraft:zombie ${x + 2.5} ${y} ${z + .5} {NoAI:1b,Silent:1b,PersistenceRequired:1b,Health:1000f,attributes:[{id:"minecraft:max_health",base:1000.0},{id:"minecraft:knockback_resistance",base:1.0}],ArmorItems:[{},{},{},{id:"minecraft:iron_helmet",count:1}]}`);
       }
       await healthyWait(10);
     }

@@ -35,10 +35,10 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                            Boolean lavaObscures, Boolean usePermission) {}
     public record Blocks(Boolean blockEntityTicking, Integer maxBlockTicks, Integer maxFluidTicks) {}
     public record WorldTuning(Hopper hopper, ArmorStands armorStands, AntiXray antiXray, Blocks blocks,
-                              String redstone, Integer autoSaveChunks) {
+                              String redstone, Integer autoSaveChunks, Boolean waypointCollections) {
         public static final WorldTuning INHERIT = new WorldTuning(new Hopper(null, null, null, null, null, null),
             new ArmorStands(null, null, null, null, null), new AntiXray(null, null, null, null, null, null),
-            new Blocks(null, null, null), null, null);
+            new Blocks(null, null, null), null, null, null);
     }
     public record Performance(boolean enabled, boolean disableBundledSpark, Double generateRate, Double loadRate,
                               Double sendRate, Integer concurrentGenerates, Integer concurrentLoads,
@@ -144,7 +144,8 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                 d.overrideInt(p + ".blocks.max-scheduled-block-ticks", b.maxBlockTicks(), 1, 1000000, "inherit or per-tick scheduled block budget. Native default 65536; lower values defer mechanics."),
                 d.overrideInt(p + ".blocks.max-scheduled-fluid-ticks", b.maxFluidTicks(), 1, 1000000, "inherit or per-tick scheduled fluid budget. Native default 65536; lower values delay fluid flow.")),
             d.redstone(p + ".redstone.implementation", parent.redstone()),
-            d.overrideInt(p + ".saving.max-chunks-per-tick", parent.autoSaveChunks(), 1, 10000, "inherit or positive chunk autosave budget. Lower values spread saves over more ticks; autosave interval stays upstream-controlled."));
+            d.overrideInt(p + ".saving.max-chunks-per-tick", parent.autoSaveChunks(), 1, 10000, "inherit or positive chunk autosave budget. Lower values spread saves over more ticks; autosave interval stays upstream-controlled."),
+            d.overrideBool(p + ".experimental.waypoint-collections", parent.waypointCollections(), "EXPERIMENTAL, default OFF. Reduce waypoint collection allocation without changing locator visibility or update frequency. inherit/false uses upstream; safe/compatibility mode bypasses this."));
     }
 
     private static final class Document {

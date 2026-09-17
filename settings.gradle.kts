@@ -57,7 +57,8 @@ gradle.lifecycle.beforeProject {
     val purpurChannel = providers.gradleProperty("channel").get().trim()
     val purpurBuildNumber = providers.environmentVariable("BUILD_NUMBER").orNull?.trim()?.toInt()
     val versionString = if (purpurBuildNumber == null) {
-        "$mcVersion.local-SNAPSHOT"
+        // Keep the numeric build slot expected by Bukkit version parsers in plugins.
+        "$mcVersion.build.0-local"
     } else {
         "$mcVersion.build.$purpurBuildNumber-${purpurChannel.lowercase()}"
     }

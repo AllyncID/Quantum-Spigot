@@ -65,7 +65,6 @@ org.checkerframework:checker-qual:3.42.0=compileClasspath,runtimeClasspath
 org.cloudburstmc.math:api:2.0=compileClasspath,runtimeClasspath
 org.cloudburstmc.math:immutable:2.0=compileClasspath,runtimeClasspath
 org.cloudburstmc:nbt:3.0.5.Final=compileClasspath,runtimeClasspath
-org.geysermc.mcprotocollib:protocol:26.2-SNAPSHOT=compileClasspath,runtimeClasspath
 org.geysermc.mcprotocollib:text-serializer-nbt:0.1.0=compileClasspath,runtimeClasspath
 org.jetbrains:annotations:26.1.0=compileClasspath
 org.jspecify:jspecify:1.0.0=compileClasspath,runtimeClasspath

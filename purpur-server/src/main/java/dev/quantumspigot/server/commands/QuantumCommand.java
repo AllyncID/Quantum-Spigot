@@ -222,6 +222,7 @@ public final class QuantumCommand extends Command {
             this.line(sender, pair("Anti-Xray lava / permission", p.anticheat.antiXray.lavaObscures + "/" + p.anticheat.antiXray.usePermission));
             this.line(sender, pair("Block entities", p.unsupportedSettings.ticking.blockEntities).append(separator()).append(pair("Block/fluid tick budget", p.environment.maxBlockTicks + "/" + p.environment.maxFluidTicks)));
             this.line(sender, pair("Autosave chunks/tick", p.chunks.maxAutoSaveChunksPerTick));
+            this.line(sender, pair("Experimental waypoint collections", level.getWaypointManager().quantumWaypointCollections));
         }
         this.line(sender, note("Effective startup values. Edit config/quantum/quantum-performance.yml, then restart."));
     }

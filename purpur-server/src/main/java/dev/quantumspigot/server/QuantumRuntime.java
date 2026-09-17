@@ -87,6 +87,11 @@ public final class QuantumRuntime {
         if (runtime != null && runtime.reports != null) runtime.reports.close();
     }
 
+    public static boolean waypointCollections(String dimensionKey) {
+        QuantumRuntime runtime = instance;
+        return runtime != null && Boolean.TRUE.equals(runtime.config.worldTuning(dimensionKey).waypointCollections());
+    }
+
     public static void recordTick(long durationNanos) {
         QuantumRuntime runtime = instance;
         if (runtime == null || !runtime.config.diagnostics().enabled()) return;

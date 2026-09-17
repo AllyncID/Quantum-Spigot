@@ -73,6 +73,8 @@ import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.Serv
 import org.geysermc.mcprotocollib.protocol.packet.login.clientbound.ClientboundLoginFinishedPacket;
 import org.geysermc.mcprotocollib.protocol.packet.login.clientbound.ClientboundCustomQueryPacket;
 import org.geysermc.mcprotocollib.protocol.packet.login.serverbound.ServerboundCustomQueryAnswerPacket;
+import org.geysermc.mcprotocollib.protocol.packet.ping.clientbound.ClientboundPongResponsePacket;
+import org.geysermc.mcprotocollib.protocol.packet.ping.serverbound.ServerboundPingRequestPacket;
 
 /** Loopback-only protocol driver. Mixed movement requires the runner's flat arena fixture. */
 public final class BotDriver {
@@ -82,6 +84,8 @@ public final class BotDriver {
     private static final AtomicLong DISCONNECTS = new AtomicLong();
     private static volatile boolean stopping;
     private static volatile boolean active;
+    private static volatile long measuredAfter;
+    private static final List<Long> ROUND_TRIPS = java.util.Collections.synchronizedList(new ArrayList<>());
     private static String profile = "idle";
     private static byte[] forwardingSecret;
     private static final int ARENA_Y = Integer.getInteger("quantum.arena-y", 160);
@@ -150,6 +154,7 @@ public final class BotDriver {
         emit(Map.of("event", "actions_started", "timestamp", Instant.now().toString(), "profile", profile));
         long deadline = System.nanoTime() + seconds * 1_000_000_000L;
         long measurementStart = System.nanoTime() + warmupSeconds * 1_000_000_000L;
+        measuredAfter = measurementStart;
         long nextTick = System.nanoTime(), lastReport = 0, maxTickDelay = 0, warmupMaxTickDelay = 0;
         while (allSpawned && System.nanoTime() < deadline && DISCONNECTS.get() == 0) {
             long now = System.nanoTime();
@@ -181,6 +186,13 @@ public final class BotDriver {
         result.put("actions", actions());
         result.put("warmupMaxTickDelayMs", warmupMaxTickDelay / 1_000_000.0);
         result.put("warmupSeconds", warmupSeconds);
+        synchronized (ROUND_TRIPS) {
+            ROUND_TRIPS.sort(Long::compare);
+            result.put("transportRoundTrip", ROUND_TRIPS.isEmpty() ? Map.of("samples", 0) : Map.of(
+                "samples", ROUND_TRIPS.size(), "p50Ms", ROUND_TRIPS.get((ROUND_TRIPS.size() - 1) / 2) / 1_000_000.0,
+                "p95Ms", ROUND_TRIPS.get((int) Math.ceil(ROUND_TRIPS.size() * .95) - 1) / 1_000_000.0,
+                "maxMs", ROUND_TRIPS.getLast() / 1_000_000.0));
+        }
         Files.writeString(output, JSON.toJson(result) + "\n");
         emit(result);
         Thread.sleep(500);
@@ -202,6 +214,7 @@ public final class BotDriver {
         private double x, y, z;
         private float yaw, pitch;
         private long lastLook;
+        private long pingSent, lastPing;
         private final int index;
         private int entityId, targetId = -1, sequence, tick, lastTargetBlock = -1;
         private double verticalSpeed;
@@ -227,6 +240,11 @@ public final class BotDriver {
 
         @Override public synchronized void packetReceived(Session session, Packet packet) {
             RECEIVED.incrementAndGet();
+            if (packet instanceof ClientboundPongResponsePacket pong && pong.getPingTime() == pingSent && pingSent != 0) {
+                if (pingSent >= measuredAfter) ROUND_TRIPS.add(System.nanoTime() - pingSent);
+                pingSent = 0;
+                count("pingResponses");
+            }
             if (packet instanceof ClientboundCustomQueryPacket query) {
                 try {
                     byte[] answer = forwardingSecret != null && query.getChannel().asString().equals("velocity:player_info")
@@ -292,6 +310,11 @@ public final class BotDriver {
         }
 
         private synchronized void tick(long now) {
+            if (spawned && pingSent == 0 && now - lastPing >= 5_000_000_000L) {
+                lastPing = pingSent = now;
+                session.send(new ServerboundPingRequestPacket(now));
+                count("pingRequests");
+            }
             if (!this.spawned || !this.session.isConnected()) return;
             if (!profile.equals("idle")) {
                 gameplay();

@@ -1,0 +1,1776 @@
+{
+  "repository": "https://github.com/BX-Team/DivineMC",
+  "commit": "039981b0bf973ea9bee0f2521b2c01d9bb419802",
+  "purpur_parent": "ab0b6b65a198238af250de99c02ae93f89029327",
+  "scope": "Active source/feature patches; removed patches excluded. Headers are source notices, not independent provenance verification.",
+  "patches": [
+    {
+      "path": "divinemc-api/build.gradle.kts.patch",
+      "bytes": 5969,
+      "header": "--- a/purpur-api/build.gradle.kts\n+++ b/purpur-api/build.gradle.kts\n@@ -26,7 +_,7 @@\n     overrideConfigFile.set(layout.projectDirectory.file(\"../paper-api/.checkstyle/checkstyle.xml\"))\n }\n \n-val annotationsVersion = \"26.0.2\"\n+val annotationsVersion = \"26.1.0\" // DivineMC - Bump dependencies\n val adventureVersion = \"5.2.0\"\n val bungeeCordChatVersion = \"1.21-R0.2-deprecated+build.21\"\n val slf4jVersion = \"2.0.17\"\n@@ -60,7 +_,7 @@\n     // api dependencies are listed transitively to API consumers\n     api(\"com.google.guava:guava:33.6.0-jre\")\n     api(\"com.google.code.gson:gson:2.14.0\")\n-    api(\"org.yaml:snakeyaml:2.2\")\n+    api(\"org.yaml:snakeyaml:2.3\") // DivineMC - Bump dependencies - 2.4+ drops Base64Coder, which paper-server ItemStackTest still uses\n     api(\"org.joml:joml:1.10.8\") {\n         isTransitive = false // https://github.com/JOML-CI/JOML/issues/352\n     }\n@@ -68,6 +_,7 @@\n     api(\"org.apache.logging.log4j:log4j-api:$log4jVersion\")\n     api(\"org.slf4j:slf4j-api:$slf4jVersion\")\n     api(\"com.mojang:brigadier:1.3.10\")\n+    api(\"io.sentry:sentry:8.52.0\") // DivineMC - Pufferfish: Sentry\n \n     // Deprecate bungeecord-chat in favor of adventure\n     api(\"net.md-5:bungeecord-chat:$bungeeCordChatVersion\") {\n@@ -83,9 +_,11 @@\n     apiAndDocs(\"net.kyori:adventure-text-serializer-plain\")\n     apiAndDocs(\"net.kyori:adventure-text-logger-slf4j\")\n \n-    api(\"org.apache.maven:maven-resolver-provider:3.9.6\") // make API dependency for Paper Plugins\n-    implementation(\"org.apache.maven.resolver:maven-resolver-connector-basic:1.9.18\")\n-    implementation(\"org.apache.maven.resolver:maven-resolver-transport-http:1.9.18\")\n+    // DivineMC start - Bump dependencies\n+    api(\"org.apache.maven:maven-resolver-provider:3.9.16\") // make API dependency for Paper Plugins\n+    implementation(\"org.apache.maven.resolver:maven-resolver-connector-basic:1.9.27\")\n+    implementation(\"org.apache.maven.resolver:maven-resolver-transport-http:1.9.27\")\n+    // DivineMC end - Bump dependencies\n \n     // Annotations - Slowly migrate to jspecify\n     val annotations = \"org.jetbrains:annotations:$annotationsVersion\"\n@@ -93,7 +_,7 @@\n     testCompileOnly(annotations)\n     javadocSourcepath(annotations) // For adventure-api module requirements\n \n-    val checkerQual = \"org.checkerframework:checker-qual:3.49.2\"\n+    val checkerQual = \"org.checkerframework:checker-qual:3.55.1\" // DivineMC - Bump dependencies\n     compileOnlyApi(checkerQual)\n     testCompileOnly(checkerQual)\n \n@@ -108,8 +_,10 @@\n     mockitoAgent(\"org.mockito:mockito-core:5.22.0\") { isTransitive = false } // configure mockito agent that is needed in newer java versions\n     testRuntimeOnly(\"org.junit.platform:junit-platform-launcher:6.0.3\")\n \n+    compileOnly(\"org.apache.commons:commons-lang3:3.20.0\") // DivineMC - Required for Bukkit\n+\n     // checkstyle\n-    checkstyle(project(\":purpur-checkstyle\"))\n+    checkstyle(project(\":divinemc-checkstyle\")) // DivineMC - Rebrand\n }\n \n val generatedDir: java.nio.file.Path = rootProject.layout.projectDirectory.dir(\"paper-api/src/generated/java\").asFile.toPath() // Purpur\n@@ -123,17 +_,21 @@\n         java {\n             srcDir(generatedDir)\n             srcDir(file(\"../paper-api/src/main/java\"))\n+            srcDir(file(\"../purpur-api/src/main/java\")) // DivineMC - Rebrand\n         }\n         resources {\n             srcDir(file(\"../paper-api/src/main/resources\"))\n+            srcDir(file(\"../purpur-api/src/main/resources\")) // DivineMC - Rebrand\n         }\n     }\n     test {\n         java {\n             srcDir(file(\"../paper-api/src/test/java\"))\n+            srcDir(file(\"../purpur-api/src/test/java\")) // DivineMC - Rebrand\n         }\n         resources {\n             srcDir(file(\"../paper-api/src/test/resources\"))\n+            srcDir(file(\"../purpur-api/src/test/resources\")) // DivineMC - Rebrand\n         }\n     }\n }\n@@ -215,14 +_,13 @@\n val services = objects.newInstance<Services>()\n \n tasks.withType<Javadoc>().configureEach {\n-    (options as StandardJavadocDocletOptions).addStringOption(\"Xdoclint:none\", \"-quiet\") // Purpur - silence Paper's bajillion javadoc warnings\n     val options = options as StandardJavadocDocletOptions\n     options.overview = \"../paper-api/src/main/javadoc/overview.html\"\n     options.use()\n     options.isDocFilesSubDirs = true\n     options.links(\n         \"https://guava.dev/releases/33.6.0-jre/api/docs/\",\n-        \"https://www.javadocs.dev/org.yaml/snakeyaml/2.2/\",\n+        \"https://javadoc.io/doc/org.yaml/snakeyaml/2.3/\", // DivineMC - Bump dependencies\n         \"https://www.javadocs.dev/org.jetbrains/annotations/$annotationsVersion/\",\n         \"https://www.javadocs.dev/org.joml/joml/1.10.8/\",\n         \"https://www.javadocs.dev/com.google.code.gson/gson/2.14.0\",\n@@ -230,7 +_,7 @@\n         \"https://jd.papermc.io/adventure/$adventureVersion/\",\n         \"https://www.javadocs.dev/org.slf4j/slf4j-api/$slf4jVersion/\",\n         \"https://logging.apache.org/log4j/2.x/javadoc/log4j-api/\",\n-        \"https://www.javadocs.dev/org.apache.maven.resolver/maven-resolver-api/1.7.3\",\n+        \"https://www.javadocs.dev/org.apache.maven.resolver/maven-resolver-api/1.9.27\", // DivineMC - Bump dependencies\n     )\n     options.tags(projectCustomJavadocTags.map { it.toOptionString() })\n \n@@ -254,7 +_,20 @@\n             into(\"build/docs/javadoc\")\n         }\n     }\n-}\n+\n+    options.addStringOption(\"Xdoclint:none\", \"-quiet\") // DivineMC - Hide unnecessary javadoc warnings\n+    options.addStringOption(\"-add-modules\", \"jdk.incubator.vector\") // DivineMC - Required for simd\n+}\n+\n+// DivineMC start - Hide unnecessary compilation warnings\n+tasks.withType<JavaCompile> {\n+    val compilerArgs = options.compilerArgs\n+    compilerArgs.add(\"-Xlint:-module\")\n+    compilerArgs.add(\"-Xlint:-removal\")\n+    compilerArgs.add(\"-Xlint:-dep-ann\")\n+    compilerArgs.add(\"--add-modules=jdk.incubator.vector\")\n+}\n+// DivineMC end - Hide unnecessary compilation warnings\n \n tasks.test {\n     useJUnitPlatform()",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0001-Rebrand.patch",
+      "bytes": 1916,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Fri, 21 Feb 2025 22:58:46 +0300\nSubject: [PATCH] Rebrand",
+      "touched_files": [
+        "src/main/java/io/papermc/paper/ServerBuildInfo.java",
+        "src/main/java/org/bukkit/command/defaults/VersionCommand.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0002-Delete-Timings.patch",
+      "bytes": 112690,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 11 Jan 2025 23:57:34 +0300\nSubject: [PATCH] Delete Timings",
+      "touched_files": [
+        "src/main/java/co/aikar/timings/FullServerTickHandler.java",
+        "src/main/java/co/aikar/timings/NullTimingHandler.java",
+        "src/main/java/co/aikar/timings/TimedEventExecutor.java",
+        "src/main/java/co/aikar/timings/Timing.java",
+        "src/main/java/co/aikar/timings/TimingData.java",
+        "src/main/java/co/aikar/timings/TimingHandler.java",
+        "src/main/java/co/aikar/timings/TimingHistory.java",
+        "src/main/java/co/aikar/timings/TimingHistoryEntry.java",
+        "src/main/java/co/aikar/timings/TimingIdentifier.java",
+        "src/main/java/co/aikar/timings/Timings.java",
+        "src/main/java/co/aikar/timings/TimingsCommand.java",
+        "src/main/java/co/aikar/timings/TimingsManager.java",
+        "src/main/java/co/aikar/timings/TimingsReportListener.java",
+        "src/main/java/co/aikar/timings/UnsafeTimingHandler.java",
+        "src/main/java/co/aikar/util/Counter.java",
+        "src/main/java/co/aikar/util/JSONUtil.java",
+        "src/main/java/co/aikar/util/LoadingIntMap.java",
+        "src/main/java/co/aikar/util/LoadingMap.java",
+        "src/main/java/co/aikar/util/MRUMapCache.java",
+        "src/main/java/org/bukkit/command/Command.java",
+        "src/main/java/org/bukkit/command/FormattedCommandAlias.java",
+        "src/main/java/org/bukkit/command/SimpleCommandMap.java",
+        "src/main/java/org/bukkit/plugin/SimplePluginManager.java",
+        "src/main/java/org/spigotmc/CustomTimingsHandler.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0003-Delete-ReloadCommand.patch",
+      "bytes": 6054,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 2 Jul 2025 19:14:14 +0300\nSubject: [PATCH] Delete ReloadCommand",
+      "touched_files": [
+        "src/main/java/org/bukkit/command/SimpleCommandMap.java",
+        "src/main/java/org/bukkit/command/defaults/ReloadCommand.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0004-Expanded-Adventure-support.patch",
+      "bytes": 2816,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 3 Mar 2025 01:14:19 +0300\nSubject: [PATCH] Expanded Adventure support",
+      "touched_files": [
+        "src/main/java/org/bukkit/Color.java",
+        "src/main/java/org/bukkit/DyeColor.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0005-Extend-Location-API.patch",
+      "bytes": 5210,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 3 Mar 2025 01:15:10 +0300\nSubject: [PATCH] Extend Location API",
+      "touched_files": [
+        "src/main/java/org/bukkit/Location.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0006-Extend-Sound-API.patch",
+      "bytes": 3348,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 3 Mar 2025 01:16:29 +0300\nSubject: [PATCH] Extend Sound API",
+      "touched_files": [
+        "src/main/java/org/bukkit/block/Block.java",
+        "src/main/java/org/bukkit/entity/Entity.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0007-Pufferfish-Sentry.patch",
+      "bytes": 4125,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Fri, 21 Mar 2025 01:03:40 +0300\nSubject: [PATCH] Pufferfish: Sentry",
+      "touched_files": [
+        "src/main/java/org/bukkit/plugin/SimplePluginManager.java",
+        "src/main/java/org/bukkit/plugin/java/JavaPluginLoader.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0008-Paper-PR-Player-standing-on-position-API.patch",
+      "bytes": 2076,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 23 Mar 2025 16:52:42 +0300\nSubject: [PATCH] Paper PR: Player standing on position API",
+      "touched_files": [
+        "src/main/java/org/bukkit/entity/Entity.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/features/0009-SparklyPaper-Parallel-world-ticking.patch",
+      "bytes": 2206,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Tue, 28 Oct 2025 16:26:54 +0300\nSubject: [PATCH] SparklyPaper: Parallel world ticking\n\nOriginal license: MIT\nOriginal project (API): https://github.com/Biquaternions/Fish\nOriginal project: https://github.com/SparklyPower/SparklyPaper\n\nThis patch provides an API for performance monitoring plugins.",
+      "touched_files": [
+        "src/main/java/org/bukkit/Server.java",
+        "src/main/java/org/bukkit/World.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-api/paper-patches/files/.checkstyle/ignored_directories.txt.patch",
+      "bytes": 576,
+      "header": "--- a/.checkstyle/ignored_directories.txt\n+++ b/.checkstyle/ignored_directories.txt\n@@ -209,3 +_,8 @@\n purpur-api/src/main/java/org/purpurmc/purpur/event/player/\n purpur-api/src/main/java/org/purpurmc/purpur/event/entity/\n purpur-api/src/main/java/org/purpurmc/purpur/event/inventory/\n+divinemc-api/src/main/java/dev/imanity/antixray/sdk/\n+divinemc-api/src/main/java/gg/pufferfish/pufferfish/sentry/\n+divinemc-api/src/main/java/gg/pufferfish/pufferfish/simd/\n+divinemc-api/src/main/java/io/papermc/paper/event/block/\n+divinemc-api/src/main/java/io/papermc/paper/event/player/",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-checkstyle/build.gradle.kts.patch",
+      "bytes": 377,
+      "header": "--- a/purpur-checkstyle/build.gradle.kts\n+++ b/purpur-checkstyle/build.gradle.kts\n@@ -33,7 +_,7 @@\n     testRuntimeOnly(\"org.junit.platform:junit-platform-launcher\")\n     testData.implementationConfigurationName(\"org.jspecify:jspecify:1.0.0\")\n \n-    checkstyle(project(\":purpur-checkstyle\"))\n+    checkstyle(project(\":divinemc-checkstyle\")) // DivineMC - Rebrand\n }\n \n tasks {",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/build.gradle.kts.patch",
+      "bytes": 6633,
+      "header": "--- a/purpur-server/build.gradle.kts\n+++ b/purpur-server/build.gradle.kts\n@@ -14,6 +_,7 @@\n }\n \n val paperMavenPublicUrl = \"https://repo.papermc.io/repository/maven-public/\"\n+val bxTeamMavenPublicUrl = \"https://repo.bxteam.org/snapshots/\"\n \n dependencies {\n     mache(\"io.papermc:mache:26.2+build.1\")\n@@ -26,6 +_,7 @@\n \n     // Purpur start - Rebrand\n     val purpur = forks.register(\"purpur\") {\n+        rootDirectory = upstreamsDirectory().map { it.dir(\"purpur\") }\n         upstream.patchDir(\"paperServer\") {\n             upstreamPath = \"paper-server\"\n             excludes = setOf(\"src/minecraft\", \"patches\", \"build.gradle.kts\")\n@@ -33,9 +_,27 @@\n             outputDir = rootDirectory.dir(\"paper-server\")\n         }\n     }\n-    activeFork = purpur\n     // Purpur end - Rebrand\n \n+    // DivineMC start - Rebrand\n+    val divinemc = forks.register(\"divinemc\") {\n+        forks = purpur\n+        upstream.patchRepo(\"paperServer\") {\n+            upstreamRepo = purpur.patchedRepo(\"paperServer\")\n+            patchesDir = rootDirectory.dir(\"divinemc-server/paper-patches\")\n+            outputDir = rootDirectory.dir(\"paper-server\")\n+        }\n+        upstream.patchDir(\"purpurServer\") {\n+            upstreamPath = \"purpur-server\"\n+            excludes = setOf(\"src/minecraft\", \"paper-patches\", \"minecraft-patches\", \"build.gradle.kts\", \"build.gradle.kts.patch\")\n+            patchesDir = rootDirectory.dir(\"divinemc-server/purpur-patches\")\n+            outputDir = rootDirectory.dir(\"purpur-server\")\n+        }\n+    }\n+\n+    activeFork = divinemc\n+    // DivineMC end - Rebrand\n+\n     /*updatingMinecraft { // Purpur start - TODO - snapshot - we don't need this\n         // oldPaperCommit = \"d4fe85375af18bfa88f44d7c1e6a61904ae550cc\"\n     }*/ // Purpur end - TODO - snapshot - we don't need this\n@@ -45,6 +_,7 @@\n     libraryRepositories.addAll(\n         \"https://repo.maven.apache.org/maven2/\",\n         paperMavenPublicUrl,\n+        bxTeamMavenPublicUrl // DivineMC - Rebrand\n     )\n }\n \n@@ -105,10 +_,19 @@\n     main {\n         java { srcDir(\"../paper-server/src/main/java\") }\n         resources { srcDir(\"../paper-server/src/main/resources\") }\n+        // DivineMC start - Rebrand\n+        java { srcDir(\"../purpur-server/src/main/java\") }\n+        resources { srcDir(\"../purpur-server/src/main/resources\") }\n+        // DivineMC end - Rebrand\n     }\n     test {\n         java { srcDir(\"../paper-server/src/test/java\") }\n         resources { srcDir(\"../paper-server/src/test/resources\") }\n+        // DivineMC start - Rebrand\n+        java { srcDir(\"../purpur-server/src/test/java\") }\n+        resources { srcDir(\"../purpur-server/src/test/resources\") }\n+        // DivineMC end - Rebrand\n+        java { srcDir(\"src/test/java\") } // DivineMC - Include own tests dir\n     }\n }\n val log4jPlugins = sourceSets.create(\"log4jPlugins\") {\n@@ -137,7 +_,18 @@\n }\n \n dependencies {\n-    implementation(project(\":purpur-api\")) // Purpur\n+    implementation(project(\":divinemc-api\")) // DivineMC - Rebrand\n+\n+    // DivineMC start - Dependencies\n+    implementation (\"com.github.Carleslc.Simple-YAML:Simple-Yaml:1.8.5\") {\n+        exclude(group=\"org.yaml\", module=\"snakeyaml\")\n+    }\n+    implementation(\"com.github.luben:zstd-jni:1.5.7-12\")\n+    implementation(\"at.yawk.lz4:lz4-java:1.11.2\")\n+    implementation(\"net.openhft:zero-allocation-hashing:2026.0\")\n+    implementation(\"net.objecthunter:exp4j:0.4.8\")\n+    // DivineMC end - Dependencies\n+\n     implementation(\"ca.spottedleaf:leafpile:1.2.0\")\n     implementation(\"org.jline:jline-terminal-ffm:3.27.1\") // use ffm on java 22+\n     implementation(\"org.jline:jline-terminal-jni:3.27.1\") // fall back to jni on java 21\n@@ -170,7 +_,12 @@\n     // Deps that were previously in the API but have now been moved here for backwards compat, eventually to be removed\n     runtimeOnly(\"commons-lang:commons-lang:2.6\")\n     runtimeOnly(\"org.xerial:sqlite-jdbc:3.49.1.0\")\n-    runtimeOnly(\"com.mysql:mysql-connector-j:9.2.0\")\n+    // DivineMC start - Bump dependencies\n+    runtimeOnly(\"com.mysql:mysql-connector-j:9.2.0\") {\n+        exclude(\"com.google.protobuf\", \"protobuf-java\") // exclude outdated version\n+    }\n+    runtimeOnly(\"com.google.protobuf:protobuf-java:4.35.1\")\n+    // DivineMC end - Bump dependencies\n     runtimeOnly(\"com.lmax:disruptor:3.4.4\")\n     implementation(\"com.googlecode.json-simple:json-simple:1.1.1\") { // change to runtimeOnly once Timings is removed\n         isTransitive = false // includes junit\n@@ -191,6 +_,16 @@\n     implementation(\"me.lucko:spark-paper:1.10.180\")\n }\n \n+// DivineMC start - Hide irrelevant compilation warnings\n+tasks.withType<JavaCompile> {\n+    val compilerArgs = options.compilerArgs\n+    compilerArgs.add(\"-Xlint:-module\")\n+    compilerArgs.add(\"-Xlint:-removal\")\n+    compilerArgs.add(\"-Xlint:-dep-ann\")\n+    compilerArgs.add(\"--add-modules=jdk.incubator.vector\")\n+}\n+// DivineMC end - Hide irrelevant compilation warnings\n+\n tasks.jar {\n     manifest {\n         val git = Git(rootProject.layout.projectDirectory.path)\n@@ -201,20 +_,22 @@\n         val implementationVersion = \"$mcVersion-${build ?: \"DEV\"}-$gitHash\"\n         val date = git.exec(providers, \"show\", \"-s\", \"--format=%ci\", gitHash).get().trim()\n         val gitBranch = git.exec(providers, \"rev-parse\", \"--abbrev-ref\", \"HEAD\").get().trim()\n+        val channel = rootProject.providers.gradleProperty(\"channel\").get() // DivineMC - Channel\n         attributes(\n             \"Main-Class\" to \"org.bukkit.craftbukkit.Main\",\n-            \"Implementation-Title\" to \"Purpur\", // Purpur\n+            \"Implementation-Title\" to \"DivineMC\", // DivineMC - Rebrand\n             \"Implementation-Version\" to implementationVersion,\n             \"Implementation-Vendor\" to date,\n-            \"Specification-Title\" to \"Purpur\", // Purpur\n+            \"Specification-Title\" to \"DivineMC\", // DivineMC - Rebrand\n             \"Specification-Version\" to project.version,\n-            \"Specification-Vendor\" to \"Purpur Team\", // Purpur\n-            \"Brand-Id\" to \"purpurmc:purpur\", // Purpur\n-            \"Brand-Name\" to \"Purpur\", // Purpur\n+            \"Specification-Vendor\" to \"BX Team\", // DivineMC - Rebrand\n+            \"Brand-Id\" to \"bxteam:divinemc\", // DivineMC - Rebrand\n+            \"Brand-Name\" to \"DivineMC\", // DivineMC - Rebrand\n             \"Build-Number\" to (build ?: \"\"),\n             \"Build-Time\" to buildTime.toString(),\n             \"Git-Branch\" to gitBranch,\n             \"Git-Commit\" to gitHash,\n+            \"Channel\" to channel, // DivineMC - Channel\n         )\n         for (tld in setOf(\"net\", \"com\", \"org\")) {\n             attributes(\"$tld/bukkit\", \"Sealed\" to true)",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0001-Rebrand.patch",
+      "bytes": 11915,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 11 Jan 2025 22:22:01 +0300\nSubject: [PATCH] Rebrand",
+      "touched_files": [
+        "net/minecraft/CrashReport.java",
+        "net/minecraft/network/protocol/common/custom/BrandPayload.java",
+        "net/minecraft/server/Main.java",
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/server/gui/MinecraftServerGui.java",
+        "net/minecraft/world/level/chunk/storage/RegionFileStorage.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0002-Configuration.patch",
+      "bytes": 3920,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 27 Jan 2025 20:22:52 +0300\nSubject: [PATCH] Configuration",
+      "touched_files": [
+        "net/minecraft/server/dedicated/DedicatedServer.java",
+        "net/minecraft/world/level/Level.java"
+      ],
+      "config_references": [
+        "DivineConfig.init"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0003-Option-to-disable-method-profiler.patch",
+      "bytes": 1834,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 2 Feb 2025 14:43:32 +0300\nSubject: [PATCH] Option to disable method profiler",
+      "touched_files": [
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/util/profiling/Profiler.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.disableMethodProfiler"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0004-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
+      "bytes": 11185,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 23 Mar 2025 16:47:24 +0300\nSubject: [PATCH] Paper PR: Add FillBottleEvents for player and dispenser",
+      "touched_files": [
+        "net/minecraft/core/cauldron/CauldronInteractions.java",
+        "net/minecraft/core/dispenser/DispenseItemBehavior.java",
+        "net/minecraft/world/item/BottleItem.java",
+        "net/minecraft/world/level/block/BeehiveBlock.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0005-Paper-PR-Throttle-failed-spawn-attempts.patch",
+      "bytes": 18152,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 27 Mar 2025 00:04:19 +0300\nSubject: [PATCH] Paper PR: Throttle failed spawn attempts\n\nOriginal license: GPLv3\nOriginal project: https://github.com/PaperMC/Paper\nPaper pull request: https://github.com/PaperMC/Paper/pull/11099\n\nExample config in paper-world-defaults.yml:\n```\n    spawning-throttle:\n      failed-attempts-threshold: 1200\n      throttled-ticks-per-spawn:\n        ambient: 10 # default value in bukkit.yml tickers-per * 10\n        axolotls: 10\n        creature: 4000\n        monster: 10\n        underground_water_creature: 10\n        water_ambient: 10\n        water_creature: 10\n```",
+      "touched_files": [
+        "net/minecraft/world/level/NaturalSpawner.java",
+        "net/minecraft/world/level/chunk/ChunkAccess.java",
+        "net/minecraft/world/level/chunk/storage/SerializableChunkData.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0006-Raytrace-AntiXray-SDK-integration.patch",
+      "bytes": 2710,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 27 Apr 2025 14:24:19 +0300\nSubject: [PATCH] Raytrace AntiXray SDK integration\n\nIntegration with Imanity Software's Raytrace AntiXray for better use of this plugin\n\nOriginal project: https://github.com/Imanity-Software/raytrace-antixray-spigot-sdk",
+      "touched_files": [
+        "net/minecraft/server/level/ServerPlayerGameMode.java",
+        "net/minecraft/world/level/Level.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0007-Paper-PR-Add-ticket-on-player-join-to-avoid-chunk-lo.patch",
+      "bytes": 4092,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: Jason Penilla <11360596+jpenilla@users.noreply.github.com>\nDate: Fri, 13 Sep 2024 14:32:32 -0700\nSubject: [PATCH] Paper PR: Add ticket on player join to avoid chunk\n load-unload-load cycle\n\nOriginal license: GPLv3\nOriginal project: https://github.com/PaperMC/Paper\nPaper pull request: https://github.com/PaperMC/Paper/pull/11398\n\nAdding the entity will add and then immediately remove an entity load ticket, which would result in the chunk loading and then unloading before being loaded again once the player chunk loader reacts (delay can vary based on rate limit configs)\nBy adding a ticket with a short removal delay we attempt to keep the chunk loaded until the player chunk loader reacts, but this is not a guarantee due to the aforementioned rate limit configs. Plugins should still handle load/unload events as normal, however this will reduce redundant calls.\nThe delay is currently set to 2 seconds, however, we may want to adjust this before merging (for example the player chunk unload delay is 5 seconds)\n\nThis patch fixes PaperMC/Paper#9581",
+      "touched_files": [
+        "ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java",
+        "net/minecraft/server/players/PlayerList.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0008-lithium-fast_util.patch",
+      "bytes": 5659,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 24 Feb 2025 19:10:17 +0300\nSubject: [PATCH] lithium: fast_util\n\nThis patch is based on the following mixins:\n* \"net/caffeinemc/mods/lithium/mixin/math/fast_util/DirectionMixin.java\"\n* \"net/caffeinemc/mods/lithium/mixin/math/fast_util/AABBMixin.java\"\nBy: 2No2Name <2No2Name@web.de>\nAs part of: Lithium (https://github.com/CaffeineMC/lithium)\nLicensed under: LGPL-3.0 (https://www.gnu.org/licenses/lgpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/core/AxisCycle.java",
+        "net/minecraft/core/Direction.java",
+        "net/minecraft/world/phys/AABB.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0009-C2ME-Optimize-world-gen-math.patch",
+      "bytes": 2605,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 6 Jul 2025 01:55:37 +0300\nSubject: [PATCH] C2ME: Optimize world gen math\n\nThis patch is based on following mixins:\n* \"com/ishland/c2me/opts/math/mixin/MixinChunkPos.java\"\n* \"com/ishland/c2me/opts/worldgen/vanilla/mixin/structure_weight_sampler/MixinStructureWeightSampler.java\"\nBy: ishland <ishlandmc@yeah.net>\nAs part of: C2ME-fabric (https://github.com/RelativityMC/C2ME-fabric)\nLicensed under: MIT\n\nTODO: Drop NoiseBasedChunkGenerator, move to single patch",
+      "touched_files": [
+        "net/minecraft/world/level/levelgen/Beardifier.java",
+        "net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0010-Async-locate-command.patch",
+      "bytes": 7216,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 29 Jan 2025 00:54:19 +0300\nSubject: [PATCH] Async locate command",
+      "touched_files": [
+        "net/minecraft/server/commands/LocateCommand.java",
+        "net/minecraft/world/level/chunk/ChunkGenerator.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0011-Carpet-Fixes-RecipeManager-Optimize.patch",
+      "bytes": 2991,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 19:17:31 +0300\nSubject: [PATCH] Carpet-Fixes: RecipeManager Optimize\n\nOriginal project: https://github.com/fxmorin/carpet-fixes\nOptimized the RecipeManager getFirstMatch call to be up to 3x faster\nThis is a fully vanilla optimization. Improves: [Blast]Furnace/Campfire/Smoker/Stonecutter/Crafting/Sheep Color Choosing\nThis was mostly made for the auto crafting table, since the performance boost is much more visible while using that mod",
+      "touched_files": [
+        "net/minecraft/world/item/crafting/RecipeManager.java",
+        "net/minecraft/world/item/crafting/RecipeMap.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0012-lithium-faster-hash-palette.patch",
+      "bytes": 4038,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 6 Jul 2025 02:23:03 +0300\nSubject: [PATCH] lithium: faster hash palette\n\nThis patch is based on the following mixins and classes:\n* \"net/caffeinemc/mods/lithium/mixin/chunk/palette/StrategyMixin.java\"\nBy: 2No2Name <2No2Name@web.de>\nAs part of: Lithium (https://github.com/CaffeineMC/lithium)\nLicensed under: LGPL-3.0 (https://www.gnu.org/licenses/lgpl-3.0.html)\n\nReplaces the vanilla hash palette with an optimized variant",
+      "touched_files": [
+        "net/minecraft/world/level/chunk/HashMapPalette.java",
+        "net/minecraft/world/level/chunk/Strategy.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0013-C2ME-optimize-noise-generation.patch",
+      "bytes": 11622,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 6 Jul 2025 02:38:39 +0300\nSubject: [PATCH] C2ME: optimize noise generation\n\nThis patch is based on the following mixins:\n* \"com/ishland/c2me/opts/math/mixin/MixinOctavePerlinNoiseSampler.java\"\n* \"com/ishland/c2me/opts/math/mixin/MixinPerlinNoiseSampler.java\"\nBy: ishland <ishlandmc@yeah.net>\nAs part of: C2ME (https://github.com/RelativityMC/C2ME-fabric)\nLicensed under: MIT (https://opensource.org/licenses/MIT)",
+      "touched_files": [
+        "net/minecraft/world/level/levelgen/synth/ImprovedNoise.java",
+        "net/minecraft/world/level/levelgen/synth/PerlinNoise.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0014-Disable-leaf-decay.patch",
+      "bytes": 2327,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 6 Jul 2025 03:03:04 +0300\nSubject: [PATCH] Disable leaf decay",
+      "touched_files": [
+        "net/minecraft/world/level/block/LeavesBlock.java"
+      ],
+      "config_references": [
+        "DivineConfig.FixesCategory.disableLeafDecay"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0015-Optimize-entities.patch",
+      "bytes": 23502,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 16:05:57 +0300\nSubject: [PATCH] Optimize entities",
+      "touched_files": [
+        "net/minecraft/world/entity/ai/Brain.java",
+        "net/minecraft/world/entity/ai/behavior/Behavior.java",
+        "net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java",
+        "net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java",
+        "net/minecraft/world/entity/animal/goat/Goat.java",
+        "net/minecraft/world/entity/schedule/Activity.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0016-SparklyPaper-Skip-distanceToSqr-call-in-ServerEntity.patch",
+      "bytes": 3936,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 19:50:02 +0300\nSubject: [PATCH] SparklyPaper: Skip distanceToSqr call in\n ServerEntity#sendChanges if the delta movement hasn't changed\n\nOriginal project: https://github.com/SparklyPower/SparklyPaper\n\nPatch description:\n\nThe \"distanceToSqr\" call is a bit expensive, so avoiding it is pretty nice, around ~15% calls are skipped with this check\nWe could also check if the x,y,z coordinates are equal, but for now, let's just keep the identity check, which also helps us since Minecraft's code does reuse the original delta movement Vec3 object",
+      "touched_files": [
+        "net/minecraft/server/level/ServerEntity.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0017-Carpet-Fixes-Optimized-getBiome-method.patch",
+      "bytes": 5871,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 6 Jul 2025 03:24:48 +0300\nSubject: [PATCH] Carpet-Fixes: Optimized getBiome method\n\nOriginal license: MIT\nOriginal project: https://github.com/fxmorin/carpet-fixes",
+      "touched_files": [
+        "net/minecraft/world/level/biome/BiomeManager.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0018-Carpet-Fixes-Sheep-Optimization.patch",
+      "bytes": 5012,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 8 May 2025 16:49:29 +0300\nSubject: [PATCH] Carpet-Fixes: Sheep Optimization\n\nThis patch is based on the following mixins and classes:\n* \"carpetfixes/helpers/Utils.java\"\n* \"carpetfixes/mixins/optimizations/SheepEntity_childColorMixin.java\"\nBy: fxmorin <28154542+fxmorin@users.noreply.github.com>\nAs part of: carpet-fixes (https://github.com/fxmorin/carpet-fixes)\nLicensed under: MIT (https://opensource.org/licenses/MIT)\n\nPatch description:\n\nThe game determines the child sheep's color by getting a wool block from the parents, putting them in a crafting\nrecipe, getting the output wool and getting the color from that.\nI don't know in what world we would consider a data-driven method with that much overhead as a smart idea. Instead,\nwe used a prebaked list of all the possible colors and combinations, however this means that you can't use a\ndatapack to change it.",
+      "touched_files": [
+        "net/minecraft/world/item/DyeColor.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.sheepOptimization"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0019-ModernFix-compact_bit_storage.patch",
+      "bytes": 2351,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 8 Mar 2025 13:27:07 +0300\nSubject: [PATCH] ModernFix: compact_bit_storage\n\nThis patch is based on following mixins:\n* \"org/embeddedt/modernfix/common/mixin/perf/compact_bit_storage/PalettedContainerMixin.java\"\nBy: embeddedt <42941056+embeddedt@users.noreply.github.com>\nAs part of: ModernFix (https://github.com/embeddedt/ModernFix)\nLicensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/world/level/chunk/PalettedContainer.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.useCompactBitStorage"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0020-Option-to-disable-disconnect.spam.patch",
+      "bytes": 4711,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 3 Mar 2025 20:08:44 +0300\nSubject: [PATCH] Option to disable disconnect.spam",
+      "touched_files": [
+        "net/minecraft/server/network/ServerGamePacketListenerImpl.java"
+      ],
+      "config_references": [
+        "DivineConfig.NetworkCategory.disableDisconnectSpam"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0021-Option-to-disable-saving-of-snowball-and-firework.patch",
+      "bytes": 2105,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 23 Feb 2025 01:04:29 +0300\nSubject: [PATCH] Option to disable saving of snowball and firework",
+      "touched_files": [
+        "net/minecraft/world/entity/projectile/FireworkRocketEntity.java",
+        "net/minecraft/world/entity/projectile/throwableitemprojectile/Snowball.java"
+      ],
+      "config_references": [
+        "divineConfig.disableFireworkSaving",
+        "divineConfig.disableSnowballSaving"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0022-Snowball-and-Egg-knockback.patch",
+      "bytes": 3110,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 19:24:47 +0300\nSubject: [PATCH] Snowball and Egg knockback",
+      "touched_files": [
+        "net/minecraft/world/entity/projectile/throwableitemprojectile/Snowball.java",
+        "net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEgg.java"
+      ],
+      "config_references": [
+        "divineConfig.eggCanKnockback",
+        "divineConfig.snowballCanKnockback"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0023-Optimize-suffocation.patch",
+      "bytes": 1997,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 11 Jun 2025 16:40:43 +0300\nSubject: [PATCH] Optimize suffocation\n\nOriginal license: GPL v3\nOriginal project: https://github.com/pufferfish-gg/Pufferfish",
+      "touched_files": [
+        "net/minecraft/world/entity/LivingEntity.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.enableSuffocationOptimization"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0024-Reduce-chunk-loading-lookups.patch",
+      "bytes": 2136,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 11 Jun 2025 19:12:00 +0300\nSubject: [PATCH] Reduce chunk loading & lookups\n\nOriginal license: GPL v3\nOriginal project: https://github.com/pufferfish-gg/Pufferfish",
+      "touched_files": [
+        "net/minecraft/world/entity/monster/EnderMan.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.reduceChuckLoadAndLookup"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0025-Configurable-movement-speed-for-entities.patch",
+      "bytes": 5434,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 10 Dec 2025 22:45:49 +0300\nSubject: [PATCH] Configurable movement speed for entities",
+      "touched_files": [
+        "net/minecraft/world/entity/monster/zombie/Drowned.java",
+        "net/minecraft/world/entity/monster/zombie/Husk.java",
+        "net/minecraft/world/entity/monster/zombie/Zombie.java",
+        "net/minecraft/world/entity/monster/zombie/ZombieVillager.java",
+        "net/minecraft/world/entity/monster/zombie/ZombifiedPiglin.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0026-Option-to-allow-weird-movement-and-disable-teleporti.patch",
+      "bytes": 6399,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 18:03:13 +0300\nSubject: [PATCH] Option to allow weird movement and disable teleporting\n players when they move too quickly",
+      "touched_files": [
+        "net/minecraft/server/network/ServerGamePacketListenerImpl.java"
+      ],
+      "config_references": [
+        "DivineConfig.FixesCategory.alwaysAllowWeirdMovement",
+        "DivineConfig.FixesCategory.ignoreMovedTooQuicklyWhenLagging"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0027-Optimize-Raids.patch",
+      "bytes": 8210,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 10 Dec 2025 22:47:51 +0300\nSubject: [PATCH] Optimize Raids",
+      "touched_files": [
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/world/entity/raid/Raid.java",
+        "net/minecraft/world/entity/raid/Raider.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0028-Small-optimization-to-LinearPalette.patch",
+      "bytes": 2674,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 7 Jul 2025 04:21:38 +0300\nSubject: [PATCH] Small optimization to LinearPalette",
+      "touched_files": [
+        "net/minecraft/world/level/chunk/LinearPalette.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0029-Optimize-VarInt-and-VarLong-write.patch",
+      "bytes": 8901,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 9 Jul 2025 02:08:35 +0300\nSubject: [PATCH] Optimize VarInt and VarLong write\n\nThis patch is based on the following commit:\n\"Reapply \"Optimize varint writing\"\"\nBy: Andrew Steinborn <git@steinborn.me>\nAs part of: Velocity (https://github.com/PaperMC/Velocity)\nLicensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/network/VarInt.java",
+        "net/minecraft/network/VarLong.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0030-Optimize-Fluids.patch",
+      "bytes": 7754,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Fri, 31 Jan 2025 22:40:54 +0300\nSubject: [PATCH] Optimize Fluids",
+      "touched_files": [
+        "net/minecraft/world/level/block/LiquidBlock.java",
+        "net/minecraft/world/level/material/FlowingFluid.java",
+        "net/minecraft/world/level/material/LavaFluid.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0031-Optimize-Structure-Generation.patch",
+      "bytes": 18285,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Tue, 4 Feb 2025 19:52:24 +0300\nSubject: [PATCH] Optimize Structure Generation\n\nOriginal project: https://github.com/TelepathicGrunt/StructureLayoutOptimizer\nOriginal license: MIT",
+      "touched_files": [
+        "net/minecraft/world/level/levelgen/structure/pools/JigsawPlacement.java",
+        "net/minecraft/world/level/levelgen/structure/pools/SinglePoolElement.java",
+        "net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplate.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.deduplicateShuffledTemplatePoolElementList",
+        "DivineConfig.PerformanceCategory.enableStructureLayoutOptimizer"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0032-Implement-NoChatReports.patch",
+      "bytes": 15174,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Tue, 4 Feb 2025 01:49:17 +0300\nSubject: [PATCH] Implement NoChatReports",
+      "touched_files": [
+        "net/minecraft/network/FriendlyByteBuf.java",
+        "net/minecraft/network/protocol/game/ServerboundChatCommandSignedPacket.java",
+        "net/minecraft/network/protocol/game/ServerboundChatPacket.java",
+        "net/minecraft/network/protocol/game/ServerboundChatSessionUpdatePacket.java",
+        "net/minecraft/network/protocol/status/ServerStatus.java",
+        "net/minecraft/server/dedicated/DedicatedServer.java",
+        "net/minecraft/server/network/ServerCommonPacketListenerImpl.java",
+        "net/minecraft/server/players/PlayerList.java"
+      ],
+      "config_references": [
+        "DivineConfig.NetworkCategory.noChatReportsAddQueryData",
+        "DivineConfig.NetworkCategory.noChatReportsConvertToGameMessage",
+        "DivineConfig.NetworkCategory.noChatReportsDebugLog",
+        "DivineConfig.NetworkCategory.noChatReportsDemandOnClient",
+        "DivineConfig.NetworkCategory.noChatReportsDisconnectDemandOnClientMessage",
+        "DivineConfig.NetworkCategory.noChatReportsEnabled"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0033-Lag-compensation.patch",
+      "bytes": 15965,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 18:38:26 +0300\nSubject: [PATCH] Lag compensation",
+      "touched_files": [
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/world/entity/LivingEntity.java",
+        "net/minecraft/world/entity/PortalProcessor.java",
+        "net/minecraft/world/entity/item/ItemEntity.java",
+        "net/minecraft/world/item/Item.java",
+        "net/minecraft/world/level/block/state/BlockBehaviour.java",
+        "net/minecraft/world/level/chunk/LevelChunk.java",
+        "net/minecraft/world/level/material/LavaFluid.java",
+        "net/minecraft/world/level/material/WaterFluid.java"
+      ],
+      "config_references": [
+        "DivineConfig.MiscCategory.blockBreakingAcceleration",
+        "DivineConfig.MiscCategory.blockEntityAcceleration",
+        "DivineConfig.MiscCategory.eatingAcceleration",
+        "DivineConfig.MiscCategory.fluidAcceleration",
+        "DivineConfig.MiscCategory.lagCompensationEnabled",
+        "DivineConfig.MiscCategory.pickupAcceleration",
+        "DivineConfig.MiscCategory.portalAcceleration",
+        "DivineConfig.MiscCategory.potionEffectAcceleration"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0034-Virtual-Threads.patch",
+      "bytes": 5769,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 24 Feb 2025 19:29:58 +0300\nSubject: [PATCH] Virtual Threads",
+      "touched_files": [
+        "net/minecraft/commands/Commands.java",
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/server/network/ServerGamePacketListenerImpl.java",
+        "net/minecraft/server/network/ServerTextFilter.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.virtualChatScheduler",
+        "DivineConfig.PerformanceCategory.virtualCommandBuilderScheduler",
+        "DivineConfig.PerformanceCategory.virtualServerTextFilterPool",
+        "DivineConfig.PerformanceCategory.virtualTabCompleteScheduler",
+        "DivineConfig.PerformanceCategory.virtualThreadsEnabled"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0035-Async-Chunk-Sending.patch",
+      "bytes": 9006,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 3 Mar 2025 19:29:13 +0300\nSubject: [PATCH] Async Chunk Sending",
+      "touched_files": [
+        "net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java",
+        "net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java",
+        "net/minecraft/server/network/PlayerChunkSender.java",
+        "net/minecraft/world/level/chunk/LevelChunkSection.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.asyncChunkSendingEnabled"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0036-Command-block-parse-results-caching.patch",
+      "bytes": 5270,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 15 Mar 2025 22:01:08 +0300\nSubject: [PATCH] Command block parse results caching",
+      "touched_files": [
+        "net/minecraft/world/level/BaseCommandBlock.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.commandBlockParseResultsCaching"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0037-Player-ProfileResult-caching.patch",
+      "bytes": 3337,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 26 Apr 2025 22:30:35 +0300\nSubject: [PATCH] Player ProfileResult caching",
+      "touched_files": [
+        "net/minecraft/server/network/ServerLoginPacketListenerImpl.java"
+      ],
+      "config_references": [
+        "DivineConfig.NetworkCategory.playerProfileResultCachingEnabled",
+        "DivineConfig.NetworkCategory.playerProfileResultCachingTimeout"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0038-Implement-Secure-Seed.patch",
+      "bytes": 33952,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Tue, 28 Jan 2025 00:54:57 +0300\nSubject: [PATCH] Implement Secure Seed\n\nOriginal license: GPLv3\nOriginal project: https://github.com/plasmoapp/matter",
+      "touched_files": [
+        "net/minecraft/server/commands/SeedCommand.java",
+        "net/minecraft/server/dedicated/DedicatedServerProperties.java",
+        "net/minecraft/server/level/ServerChunkCache.java",
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/world/entity/monster/cubemob/Slime.java",
+        "net/minecraft/world/level/chunk/ChunkAccess.java",
+        "net/minecraft/world/level/chunk/ChunkGenerator.java",
+        "net/minecraft/world/level/chunk/ChunkGeneratorStructureState.java",
+        "net/minecraft/world/level/chunk/status/ChunkStep.java",
+        "net/minecraft/world/level/levelgen/WorldOptions.java",
+        "net/minecraft/world/level/levelgen/feature/GeodeFeature.java",
+        "net/minecraft/world/level/levelgen/structure/Structure.java",
+        "net/minecraft/world/level/levelgen/structure/placement/RandomSpreadStructurePlacement.java",
+        "net/minecraft/world/level/levelgen/structure/placement/StructurePlacement.java",
+        "net/minecraft/world/level/levelgen/structure/pools/JigsawPlacement.java",
+        "net/minecraft/world/level/levelgen/structure/structures/MineshaftStructure.java",
+        "net/minecraft/world/level/levelgen/structure/structures/OceanMonumentStructure.java",
+        "net/minecraft/world/level/levelgen/structure/structures/RuinedPortalStructure.java"
+      ],
+      "config_references": [
+        "DivineConfig.MiscCategory.enableSecureSeed"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0039-Dynamic-Activation-of-Brain.patch",
+      "bytes": 27346,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 23 Mar 2025 01:16:35 +0300\nSubject: [PATCH] Dynamic Activation of Brain",
+      "touched_files": [
+        "io/papermc/paper/entity/activation/ActivationRange.java",
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/world/entity/Entity.java",
+        "net/minecraft/world/entity/EntityType.java",
+        "net/minecraft/world/entity/Mob.java",
+        "net/minecraft/world/entity/ai/behavior/VillagerPanicTrigger.java",
+        "net/minecraft/world/entity/ai/goal/GoalSelector.java",
+        "net/minecraft/world/entity/animal/allay/Allay.java",
+        "net/minecraft/world/entity/animal/axolotl/Axolotl.java",
+        "net/minecraft/world/entity/animal/frog/Frog.java",
+        "net/minecraft/world/entity/animal/frog/Tadpole.java",
+        "net/minecraft/world/entity/animal/goat/Goat.java",
+        "net/minecraft/world/entity/monster/hoglin/Hoglin.java",
+        "net/minecraft/world/entity/monster/piglin/Piglin.java",
+        "net/minecraft/world/entity/monster/warden/Warden.java",
+        "net/minecraft/world/entity/npc/villager/Villager.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.dabActivationDistanceMod",
+        "DivineConfig.PerformanceCategory.dabDontEnableIfInWater",
+        "DivineConfig.PerformanceCategory.dabEnabled",
+        "DivineConfig.PerformanceCategory.dabMaximumActivationFrequency",
+        "DivineConfig.PerformanceCategory.dabStartDistanceSquared"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0040-Petal-Async-Pathfinding.patch",
+      "bytes": 56856,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 10 Dec 2025 23:34:59 +0300\nSubject: [PATCH] Petal: Async Pathfinding\n\nThis patch is based on the following patch:\n\"feat: async path processing\"\nAs part of: Petal (https://github.com/Bloom-host/Petal)\nLicensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)\n\nMakes most pathfinding-related work happen asynchronously",
+      "touched_files": [
+        "net/minecraft/world/entity/ai/behavior/AcquirePoi.java",
+        "net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java",
+        "net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java",
+        "net/minecraft/world/entity/ai/goal/DoorInteractGoal.java",
+        "net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java",
+        "net/minecraft/world/entity/ai/navigation/FlyingPathNavigation.java",
+        "net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java",
+        "net/minecraft/world/entity/ai/navigation/PathNavigation.java",
+        "net/minecraft/world/entity/ai/navigation/WaterBoundPathNavigation.java",
+        "net/minecraft/world/entity/ai/sensing/NearestBedSensor.java",
+        "net/minecraft/world/entity/animal/bee/Bee.java",
+        "net/minecraft/world/entity/animal/frog/Frog.java",
+        "net/minecraft/world/entity/animal/rabbit/Rabbit.java",
+        "net/minecraft/world/entity/monster/Strider.java",
+        "net/minecraft/world/entity/monster/warden/Warden.java",
+        "net/minecraft/world/entity/monster/zombie/Drowned.java",
+        "net/minecraft/world/level/pathfinder/NodeEvaluator.java",
+        "net/minecraft/world/level/pathfinder/Path.java",
+        "net/minecraft/world/level/pathfinder/PathFinder.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.asyncPathfinding"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0041-Parallel-entity-tracker.patch",
+      "bytes": 15023,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 20 Jul 2025 12:21:41 +0300\nSubject: [PATCH] Parallel entity tracker\n\nDerived from Petal's multithreaded tracker; rewritten into a three-phase\nscan/apply/send model with join barriers.",
+      "touched_files": [
+        "net/minecraft/server/level/ChunkMap.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.parallelTrackerEnabled"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0042-Pufferfish-Optimize-mob-spawning.patch",
+      "bytes": 12066,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 19 Mar 2025 23:24:32 +0300\nSubject: [PATCH] Pufferfish: Optimize mob spawning\n\nOriginal license: GPL v3\nOriginal project: https://github.com/pufferfish-gg/Pufferfish\n\nThis patch reduces the main-thread impact of mob spawning by moving spawning work to other threads",
+      "touched_files": [
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/server/dedicated/DedicatedServer.java",
+        "net/minecraft/server/level/ServerChunkCache.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.enableAsyncSpawning"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0043-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
+      "bytes": 4204,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 9 Jul 2025 03:06:02 +0300\nSubject: [PATCH] Pufferfish: Simpler ShapelessRecipes comparison for Vanilla\n\nOriginal license: GPL v3\nOriginal project: https://github.com/pufferfish-gg/Pufferfish\n\nPatch description:\n\nPaper added a fancy sorting comparison due to Bukkit recipes breaking\nthe vanilla one, however this is far more advanced than what you need\nfor all the vanilla recipes.",
+      "touched_files": [
+        "net/minecraft/world/item/crafting/ShapelessRecipe.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0044-C2ME-Density-Function-Compiler.patch",
+      "bytes": 78937,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 12 Feb 2025 01:05:50 +0300\nSubject: [PATCH] C2ME: Density Function Compiler\n\nThis functionality compiles density functions from world generation\ndatapacks (including vanilla generation) to JVM bytecode to increase\nperformance by allowing JVM JIT to better optimize the code.\nAll functions provided by vanilla are implemented.\n\nAbout Density function: https://minecraft.wiki/w/Density_function",
+      "touched_files": [
+        "net/minecraft/util/CubicSpline.java",
+        "net/minecraft/world/level/levelgen/DensityFunction.java",
+        "net/minecraft/world/level/levelgen/DensityFunctions.java",
+        "net/minecraft/world/level/levelgen/NoiseChunk.java",
+        "net/minecraft/world/level/levelgen/NoiseRouter.java",
+        "net/minecraft/world/level/levelgen/RandomState.java",
+        "net/minecraft/world/level/levelgen/synth/BlendedNoise.java",
+        "net/minecraft/world/level/levelgen/synth/ImprovedNoise.java",
+        "net/minecraft/world/level/levelgen/synth/NormalNoise.java",
+        "net/minecraft/world/level/levelgen/synth/PerlinNoise.java",
+        "net/minecraft/world/level/levelgen/synth/SimplexNoise.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.enableDensityFunctionCompiler"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0045-Clump-experience-orbs.patch",
+      "bytes": 12307,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 16:47:09 +0300\nSubject: [PATCH] Clump experience orbs",
+      "touched_files": [
+        "net/minecraft/world/entity/ExperienceOrb.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.clumpOrbs"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0046-SparklyPaper-Parallel-world-ticking.patch",
+      "bytes": 119917,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 29 Jan 2025 00:59:03 +0300\nSubject: [PATCH] SparklyPaper: Parallel world ticking\n\nOriginal project: https://github.com/SparklyPower/SparklyPaper",
+      "touched_files": [
+        "ca/spottedleaf/moonrise/patches/chunk_system/level/entity/ChunkEntitySlices.java",
+        "ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java",
+        "io/papermc/paper/entity/activation/ActivationRange.java",
+        "io/papermc/paper/redstone/RedstoneWireTurbo.java",
+        "net/minecraft/core/dispenser/DispenseItemBehavior.java",
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/server/PlayerAdvancements.java",
+        "net/minecraft/server/dedicated/DedicatedServer.java",
+        "net/minecraft/server/level/ChunkMap.java",
+        "net/minecraft/server/level/ServerChunkCache.java",
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/server/level/ServerPlayer.java",
+        "net/minecraft/server/players/PlayerList.java",
+        "net/minecraft/server/waypoints/ServerWaypointManager.java",
+        "net/minecraft/world/entity/Entity.java",
+        "net/minecraft/world/entity/EntitySelector.java",
+        "net/minecraft/world/entity/PortalProcessor.java",
+        "net/minecraft/world/entity/ai/behavior/GoToPotentialJobSite.java",
+        "net/minecraft/world/entity/npc/villager/Villager.java",
+        "net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java",
+        "net/minecraft/world/inventory/AbstractContainerMenu.java",
+        "net/minecraft/world/item/ItemStack.java",
+        "net/minecraft/world/level/Level.java",
+        "net/minecraft/world/level/block/MushroomBlock.java",
+        "net/minecraft/world/level/block/NetherFungusBlock.java",
+        "net/minecraft/world/level/block/RedStoneWireBlock.java",
+        "net/minecraft/world/level/block/SaplingBlock.java",
+        "net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java",
+        "net/minecraft/world/level/block/grower/TreeGrower.java",
+        "net/minecraft/world/level/chunk/LevelChunk.java",
+        "net/minecraft/world/level/chunk/ProtoChunk.java",
+        "net/minecraft/world/level/entity/EntityTickList.java",
+        "net/minecraft/world/level/saveddata/maps/MapIndex.java",
+        "net/minecraft/world/level/storage/SavedDataStorage.java",
+        "net/minecraft/world/ticks/LevelChunkTicks.java",
+        "net/minecraft/world/ticks/LevelTicks.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.enableParallelWorldTicking",
+        "DivineConfig.AsyncCategory.logContainerCreationStacktraces",
+        "DivineConfig.AsyncCategory.parallelThreadCount"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0047-MSPT-Tracking-for-each-world.patch",
+      "bytes": 2392,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 18:55:59 +0300\nSubject: [PATCH] MSPT Tracking for each world",
+      "touched_files": [
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/server/level/ServerLevel.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0048-Catch-update-suppressors.patch",
+      "bytes": 5109,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 23 Feb 2025 01:14:54 +0300\nSubject: [PATCH] Catch update suppressors",
+      "touched_files": [
+        "net/minecraft/network/PacketProcessor.java",
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/world/level/block/ShulkerBoxBlock.java",
+        "net/minecraft/world/level/redstone/NeighborUpdater.java"
+      ],
+      "config_references": [
+        "DivineConfig.FixesCategory.updateSuppressionCrashFix"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0049-Regionized-Chunk-Ticking.patch",
+      "bytes": 72792,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 9 Jun 2025 13:51:43 +0300\nSubject: [PATCH] Regionized Chunk Ticking\n\nThis patch adds regionized chunk ticking feature, by grouping adjacent chunks into regions and processing each region on its own thread.\n\nOriginal idea by Dueris, modified by NONPLAYT and heavily optimized by dan28000",
+      "touched_files": [
+        "ca/spottedleaf/moonrise/patches/chunk_system/level/entity/EntityLookup.java",
+        "net/minecraft/core/dispenser/DispenseItemBehavior.java",
+        "net/minecraft/network/Connection.java",
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/server/level/ChunkMap.java",
+        "net/minecraft/server/level/ServerChunkCache.java",
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/server/level/ServerPlayer.java",
+        "net/minecraft/server/level/ServerPlayerGameMode.java",
+        "net/minecraft/world/item/ItemStack.java",
+        "net/minecraft/world/level/Level.java",
+        "net/minecraft/world/level/block/BedBlock.java",
+        "net/minecraft/world/level/block/Block.java",
+        "net/minecraft/world/level/block/SaplingBlock.java",
+        "net/minecraft/world/level/block/WitherSkullBlock.java",
+        "net/minecraft/world/level/chunk/LevelChunk.java",
+        "net/minecraft/world/level/entity/EntityTickList.java",
+        "net/minecraft/world/level/redstone/CollectingNeighborUpdater.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.asyncNaturalSpawn",
+        "DivineConfig.AsyncCategory.enableAsyncSpawning",
+        "DivineConfig.AsyncCategory.enableParallelWorldTicking",
+        "DivineConfig.AsyncCategory.enableRegionizedChunkTicking"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0050-C2ME-Limit-NBT-cache.patch",
+      "bytes": 2978,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 9 Jul 2025 04:37:59 +0300\nSubject: [PATCH] C2ME: Limit NBT cache\n\nThis patch is based on the following mixins:\n* \"com/ishland/c2me/opts/chunkio/mixin/limit_nbt_cache/MixinStorageIoWorker.java\"\nBy: ishland <ishlandmc@yeah.net>\nAs part of: C2ME (https://github.com/RelativityMC/C2ME-fabric)\nLicensed under: MIT (https://opensource.org/licenses/MIT)",
+      "touched_files": [
+        "net/minecraft/world/level/chunk/storage/IOWorker.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.chunkDataCacheLimit",
+        "DivineConfig.PerformanceCategory.chunkDataCacheSoftLimit"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0051-C2ME-Optimize-Aquifer-and-Beardifier.patch",
+      "bytes": 34335,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 10 Jul 2025 03:48:14 +0300\nSubject: [PATCH] C2ME: Optimize Aquifer and Beardifier\n\nThis patch is based on the following mixins:\n* \"com/ishland/c2me/opts/worldgen/vanilla/mixin/aquifer/MixinAquiferSamplerImpl.java\"\n* \"com/ishland/c2me/opts/worldgen/general/common/random_instances/RandomUtils.java\"\nBy: ishland <ishlandmc@yeah.net>\nAs part of: C2ME (https://github.com/RelativityMC/C2ME-fabric)\nLicensed under: MIT (https://opensource.org/licenses/MIT)",
+      "touched_files": [
+        "net/minecraft/world/level/levelgen/Aquifer.java",
+        "net/minecraft/world/level/levelgen/Beardifier.java",
+        "net/minecraft/world/level/levelgen/LegacyRandomSource.java",
+        "net/minecraft/world/level/levelgen/XoroshiroRandomSource.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0052-Copper-Bulb-1gt-delay.patch",
+      "bytes": 2458,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 10 Jul 2025 04:30:21 +0300\nSubject: [PATCH] Copper Bulb 1gt delay",
+      "touched_files": [
+        "net/minecraft/world/level/block/CopperBulbBlock.java"
+      ],
+      "config_references": [
+        "DivineConfig.MiscCategory.copperBulb1gt"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0053-Crafter-1gt-delay.patch",
+      "bytes": 1648,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 10 Jul 2025 04:31:46 +0300\nSubject: [PATCH] Crafter 1gt delay",
+      "touched_files": [
+        "net/minecraft/world/level/block/CrafterBlock.java"
+      ],
+      "config_references": [
+        "DivineConfig.MiscCategory.copperBulb1gt"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0054-Leaves-Protocol-Core.patch",
+      "bytes": 7604,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 11 Dec 2025 15:47:27 +0300\nSubject: [PATCH] Leaves: Protocol Core\n\nOriginal project: https://github.com/LeavesMC/Leaves\nOriginal license: GPLv3",
+      "touched_files": [
+        "net/minecraft/network/protocol/common/custom/CustomPacketPayload.java",
+        "net/minecraft/server/MinecraftServer.java",
+        "net/minecraft/server/network/ServerCommonPacketListenerImpl.java",
+        "net/minecraft/server/players/PlayerList.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0055-Paper-PR-Optimise-non-flush-packet-sending.patch",
+      "bytes": 2983,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Fri, 11 Jul 2025 20:39:54 +0300\nSubject: [PATCH] Paper PR: Optimise non-flush packet sending\n\nOriginal project: https://github.com/PaperMC/Paper\nOriginal license: GPLv3\nPaper pull request: https://github.com/PaperMC/Paper/pull/10172\n\nPlaces like entity tracking make heavy use of packet sending,\nand internally netty will use some very expensive thread wakeup\ncalls when scheduling.\n\nThanks to various hacks in ProtocolLib as well as other\nplugins, we cannot simply use a queue of packets to group\nsend on execute. We have to call execute for each packet.\n\nTux's suggestion here is exactly what was needed - tag\nthe Runnable indicating it should not make a wakeup call.\n\nBig thanks to Tux for making this possible as I had given\nup on this optimisation before he came along.\n\nLocally this patch drops the entity tracker tick by a full 1.5x.",
+      "touched_files": [
+        "net/minecraft/network/Connection.java"
+      ],
+      "config_references": [
+        "DivineConfig.NetworkCategory.optimizeNonFlushPacketSending"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0056-Linear-region-file-format.patch",
+      "bytes": 23298,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Fri, 11 Jul 2025 21:47:45 +0300\nSubject: [PATCH] Linear region file format",
+      "touched_files": [
+        "ca/spottedleaf/moonrise/patches/chunk_system/io/ChunkSystemRegionFileStorage.java",
+        "ca/spottedleaf/moonrise/patches/chunk_system/io/MoonriseRegionFileIO.java",
+        "ca/spottedleaf/moonrise/patches/chunk_system/storage/ChunkSystemChunkBuffer.java",
+        "net/minecraft/util/worldupdate/FileToUpgrade.java",
+        "net/minecraft/util/worldupdate/RegionStorageUpgrader.java",
+        "net/minecraft/world/level/chunk/storage/RegionFile.java",
+        "net/minecraft/world/level/chunk/storage/RegionFileStorage.java"
+      ],
+      "config_references": [
+        "DivineConfig.RegionSettingsCategory.regionFileType",
+        "DivineConfig.RegionSettingsCategory.regionFileType.getArgument"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0057-Cleanup-dead-code-from-Paper.patch",
+      "bytes": 8133,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 13 Jul 2025 20:03:51 +0300\nSubject: [PATCH] Cleanup dead code from Paper",
+      "touched_files": [
+        "net/minecraft/network/Connection.java",
+        "net/minecraft/network/PacketProcessor.java",
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/world/entity/Entity.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0058-C2ME-The-End-Biome-Cache.patch",
+      "bytes": 2901,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 11 Dec 2025 15:58:04 +0300\nSubject: [PATCH] C2ME: The End Biome Cache\n\nThis patch is based on the following mixins:\n* \"com/ishland/c2me/opts/worldgen/vanilla/mixin/the_end_biome_cache/MixinTheEndBiomeSource.java\"\nBy: ishland <ishlandmc@yeah.net>\nAs part of: C2ME (https://github.com/RelativityMC/C2ME-fabric)\nLicensed under: MIT (https://opensource.org/licenses/MIT)",
+      "touched_files": [
+        "net/minecraft/world/level/biome/TheEndBiomeSource.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.endBiomeCacheCapacity",
+        "DivineConfig.PerformanceCategory.endBiomeCacheEnabled"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0059-Do-not-send-spectator-change-packet.patch",
+      "bytes": 7710,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 20 Jul 2025 00:09:31 +0300\nSubject: [PATCH] Do not send spectator change packet",
+      "touched_files": [
+        "net/minecraft/server/level/ServerPlayerGameMode.java",
+        "net/minecraft/server/players/PlayerList.java"
+      ],
+      "config_references": [
+        "DivineConfig.NetworkCategory.sendSpectatorChangePacket"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0060-Paper-PR-Fire-ServerListPingEvent-for-secondary-motd.patch",
+      "bytes": 1954,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 20 Jul 2025 16:09:38 +0300\nSubject: [PATCH] Paper PR: Fire ServerListPingEvent for secondary motd send\n\nOriginal license: GPLv3\nOriginal project: https://github.com/PaperMC/Paper\nPaper pull request: https://github.com/PaperMC/Paper/pull/8074",
+      "touched_files": [
+        "net/minecraft/server/players/PlayerList.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0061-Configurable-player-spawn-tracking-range.patch",
+      "bytes": 3118,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 4 Aug 2025 02:38:45 +0300\nSubject: [PATCH] Configurable player spawn tracking range",
+      "touched_files": [
+        "ca/spottedleaf/moonrise/patches/chunk_tick_iteration/ChunkTickConstants.java",
+        "net/minecraft/server/level/ChunkMap.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.playerNearChunkDetectionRange"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0062-Optimize-Moonrise.patch",
+      "bytes": 26523,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 11 Aug 2025 02:42:19 +0300\nSubject: [PATCH] Optimize Moonrise",
+      "touched_files": [
+        "ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java",
+        "ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java",
+        "ca/spottedleaf/moonrise/patches/chunk_system/scheduling/NewChunkHolder.java",
+        "ca/spottedleaf/moonrise/patches/chunk_system/util/ParallelSearchRadiusIteration.java",
+        "ca/spottedleaf/moonrise/patches/starlight/light/SWMRNibbleArray.java",
+        "net/minecraft/server/level/DistanceManager.java",
+        "net/minecraft/server/level/ServerChunkCache.java",
+        "net/minecraft/server/level/ServerLevel.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.enableParallelWorldTicking"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0063-lithium-combined_heightmap_update.patch",
+      "bytes": 3048,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 27 Aug 2025 22:48:22 +0300\nSubject: [PATCH] lithium: combined_heightmap_update\n\nThis patch is based on the following mixins:\n* \"net/caffeinemc/mods/lithium/mixin/world/combined_heightmap_update/LevelChunkMixin\"\nBy: 2No2Name <2No2Name@web.de>\nAs part of: Lithium (https://github.com/CaffeineMC/lithium)\nLicensed under: LGPL-3.0 (https://www.gnu.org/licenses/lgpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/world/level/chunk/LevelChunk.java",
+        "net/minecraft/world/level/levelgen/Heightmap.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0064-lithium-sleeping_block_entity.patch",
+      "bytes": 139416,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 29 Sep 2025 17:53:30 +0300\nSubject: [PATCH] lithium: sleeping_block_entity\n\nThis patch is based on the following mixins:\n* \"net/caffeinemc/mods/lithium/mixin/world/block_entity_ticking/sleeping/*.java\"\n* \"net/caffeinemc/mods/lithium/mixin/block/hopper/*.java\"\n* \"net/caffeinemc/mods/lithium/mixin/util/block_entity_retrieval/LevelMixin.java\"\n* \"net/caffeinemc/mods/lithium/mixin/util/inventory_change_listening/*.java\"\n* \"net/caffeinemc/mods/lithium/mixin/util/inventory_comparator_tracking/*.java\"\n* \"net/caffeinemc/mods/lithium/mixin/util/item_component_and_count_tracking/*.java\"\nBy: 2No2Name <2No2Name@web.de>\nAs part of: Lithium (https://github.com/CaffeineMC/lithium)\nLicensed under: LGPL-3.0 (https://www.gnu.org/licenses/lgpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/core/component/PatchedDataComponentMap.java",
+        "net/minecraft/server/commands/data/EntityDataAccessor.java",
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/world/Container.java",
+        "net/minecraft/world/entity/Entity.java",
+        "net/minecraft/world/entity/item/ItemEntity.java",
+        "net/minecraft/world/entity/vehicle/minecart/AbstractMinecartContainer.java",
+        "net/minecraft/world/inventory/AbstractContainerMenu.java",
+        "net/minecraft/world/item/ItemStack.java",
+        "net/minecraft/world/level/Level.java",
+        "net/minecraft/world/level/block/ComposterBlock.java",
+        "net/minecraft/world/level/block/DiodeBlock.java",
+        "net/minecraft/world/level/block/HopperBlock.java",
+        "net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java",
+        "net/minecraft/world/level/block/entity/BarrelBlockEntity.java",
+        "net/minecraft/world/level/block/entity/BaseContainerBlockEntity.java",
+        "net/minecraft/world/level/block/entity/BlockEntity.java",
+        "net/minecraft/world/level/block/entity/BrewingStandBlockEntity.java",
+        "net/minecraft/world/level/block/entity/CampfireBlockEntity.java",
+        "net/minecraft/world/level/block/entity/ChestBlockEntity.java",
+        "net/minecraft/world/level/block/entity/ChiseledBookShelfBlockEntity.java",
+        "net/minecraft/world/level/block/entity/CrafterBlockEntity.java",
+        "net/minecraft/world/level/block/entity/DispenserBlockEntity.java",
+        "net/minecraft/world/level/block/entity/EnderChestBlockEntity.java",
+        "net/minecraft/world/level/block/entity/HopperBlockEntity.java",
+        "net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity.java",
+        "net/minecraft/world/level/block/state/BlockBehaviour.java",
+        "net/minecraft/world/level/chunk/LevelChunk.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.hopperThrottleSkipTicks",
+        "DivineConfig.PerformanceCategory.hopperThrottleWhenFull",
+        "DivineConfig.PerformanceCategory.sleepingBlockEntity"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0065-lithium-equipment_tracking.patch",
+      "bytes": 12590,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 1 Oct 2025 01:49:00 +0300\nSubject: [PATCH] lithium: equipment_tracking\n\nThis patch is based on the following mixins:\n* \"net/caffeinemc/mods/lithium/mixin/util/item_component_and_count_tracking/PatchedDataComponentMapMixin.java\"\n* \"net/caffeinemc/mods/lithium/mixin/util/item_component_and_count_tracking/ItemStackMixin.java\"\n* \"net/caffeinemc/mods/lithium/mixin/entity/equipment_tracking/enchantment_ticking/LivingEntityMixin.java\"\n* \"net/caffeinemc/mods/lithium/mixin/entity/equipment_tracking/equipment_changes/LivingEntityMixin.java\"\n* \"net/caffeinemc/mods/lithium/mixin/entity/equipment_tracking/EntityEquipmentMixin.java\"\n* \"net/caffeinemc/mods/lithium/common/util/change_tracking/ChangePublisher.java\"\n* \"net/caffeinemc/mods/lithium/common/util/change_tracking/ChangeSubscriber.java\"\nBy: 2No2Name <2No2Name@web.de>\nAs part of: Lithium (https://github.com/CaffeineMC/lithium)\nLicensed under: LGPL-3.0 (https://www.gnu.org/licenses/lgpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/world/entity/EntityEquipment.java",
+        "net/minecraft/world/entity/LivingEntity.java",
+        "net/minecraft/world/entity/decoration/ArmorStand.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.equipmentTracking"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0066-Configurable-Files-Locations.patch",
+      "bytes": 2636,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: dan28000 <84990628+dan28000@users.noreply.github.com>\nDate: Mon, 6 Oct 2025 14:17:59 +0200\nSubject: [PATCH] Configurable Files Locations",
+      "touched_files": [
+        "net/minecraft/server/players/PlayerList.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0067-Pufferfish-Make-EntityCollisionContext-a-live-repres.patch",
+      "bytes": 4004,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Tue, 14 Oct 2025 01:42:43 +0300\nSubject: [PATCH] Pufferfish: Make EntityCollisionContext a live representation\n\nThis patch is based on the following patch:\n\"Make EntityCollisionContext a live representation\"\nBy: Paul Sauve <paul@technove.co>\nAs part of: Airplane (https://github.com/TECHNOVE/Airplane)\nLicensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/world/phys/shapes/EntityCollisionContext.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0068-Pufferfish-Better-checking-for-useless-move-packets.patch",
+      "bytes": 3286,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Tue, 14 Oct 2025 01:50:40 +0300\nSubject: [PATCH] Pufferfish: Better checking for useless move packets\n\nThis patch is based on the following patch:\n\"Better checking for useless move packets\"\nBy: Paul Sauve <paul@technove.co>\nAs part of: Airplane (https://github.com/TECHNOVE/Airplane)\nLicensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/server/level/ServerEntity.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0069-Pufferfish-Optimize-random-calls-in-chunk-ticking.patch",
+      "bytes": 3508,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 15 Jan 2026 00:16:29 +0300\nSubject: [PATCH] Pufferfish: Optimize random calls in chunk ticking\n\nThis patch is based on the following patch:\n\"Optimize random calls in chunk ticking\"\nBy: Paul Sauve <paul@technove.co>\nAs part of: Airplane (https://github.com/TECHNOVE/Airplane)\nLicensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/world/level/chunk/LevelChunk.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0070-Pufferfish-Reduce-projectile-chunk-loading.patch",
+      "bytes": 3023,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 15 Jan 2026 00:35:03 +0300\nSubject: [PATCH] Pufferfish: Reduce projectile chunk loading\n\nThis patch is based on the following patch:\n\"Reduce projectile chunk loading\"\nBy: Paul Sauve <paul@technove.co>\nAs part of: Airplane (https://github.com/TECHNOVE/Airplane)\nLicensed under: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)",
+      "touched_files": [
+        "net/minecraft/world/entity/projectile/Projectile.java"
+      ],
+      "config_references": [
+        "divineConfig.projectileMax",
+        "divineConfig.projectilePerTick",
+        "divineConfig.removeFromWorldAfterReachLimit",
+        "divineConfig.resetMovementAfterReachLimit"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0071-C2ME-native-math-optimization.patch",
+      "bytes": 14653,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 20 May 2026 01:01:37 +0300\nSubject: [PATCH] C2ME: native math optimization\n\nThis patch is based on the c2me-opts-natives-math module\nBy: ishland <ishlandmc@yeah.net>\nAs part of: C2ME (https://github.com/RelativityMC/C2ME-fabric)\nLicensed under: MIT (https://opensource.org/licenses/MIT)",
+      "touched_files": [
+        "net/minecraft/server/Main.java",
+        "net/minecraft/world/level/levelgen/DensityFunctions.java",
+        "net/minecraft/world/level/levelgen/synth/BlendedNoise.java",
+        "net/minecraft/world/level/levelgen/synth/NormalNoise.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.allowAVX512",
+        "DivineConfig.PerformanceCategory.isaTargetLevelOverride",
+        "DivineConfig.PerformanceCategory.nativeAccelerationEnabled"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0072-Parallel-sensor-phase.patch",
+      "bytes": 8485,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 4 Jul 2026 00:28:19 +0300\nSubject: [PATCH] Parallel sensor phase\n\nRuns due AI sensors (read-only world scans) on a worker pool before the entity\nticking phase, one task per mob, while the tick thread blocks on a join barrier\nso the world can't mutate. Sensors unsafe off-thread opt out via\ndivinemc$canRunAsync, and TargetingConditions are made thread-local.",
+      "touched_files": [
+        "net/minecraft/server/level/ServerLevel.java",
+        "net/minecraft/world/entity/ai/sensing/Sensor.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/features/0073-Raytrace-Entity-Culling.patch",
+      "bytes": 6063,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 19 Jul 2026 00:34:38 +0300\nSubject: [PATCH] Raytrace Entity Culling\n\nServer-side port of tr7zw's EntityCulling mod.\nEntities that a player provably cannot see (fully hidden behind opaque blocks)\nare removed from that player's entity tracker. This reduces network bandwidth,\nimproves client FPS and blinds entity-ESP cheats (e.g. freecam/x-ray style hacks\ncannot see mobs, players or items through walls anymore).",
+      "touched_files": [
+        "net/minecraft/server/level/ChunkMap.java",
+        "net/minecraft/server/level/ServerPlayer.java",
+        "net/minecraft/world/entity/EntityType.java",
+        "net/minecraft/world/level/Level.java",
+        "net/minecraft/world/waypoints/WaypointTransmitter.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/alternate/current/wire/UpdateOrder.java.patch",
+      "bytes": 324,
+      "header": "--- a/alternate/current/wire/UpdateOrder.java\n+++ b/alternate/current/wire/UpdateOrder.java\n@@ -351,6 +_,8 @@\n         }\n     };\n \n+    public static final UpdateOrder[] VALUES = values(); // DivineMC - cache UpdateOrder values()\n+\n     private final int[][] directNeighbors;\n     private final int[][] cardinalNeighbors;",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/alternate/current/wire/WireHandler.java.patch",
+      "bytes": 404,
+      "header": "--- a/alternate/current/wire/WireHandler.java\n+++ b/alternate/current/wire/WireHandler.java\n@@ -489,7 +_,7 @@\n             }\n         }\n \n-        updateOrder = UpdateOrder.values()[level.paperConfig().misc.alternateCurrentUpdateOrder.ordinal()];\n+        updateOrder = UpdateOrder.VALUES[level.paperConfig().misc.alternateCurrentUpdateOrder.ordinal()]; // DivineMC - use cached VALUES\n     }\n \n     /**",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/io/papermc/paper/command/subcommands/FixLightCommand.java.patch",
+      "bytes": 2361,
+      "header": "--- a/io/papermc/paper/command/subcommands/FixLightCommand.java\n+++ b/io/papermc/paper/command/subcommands/FixLightCommand.java\n@@ -95,17 +_,23 @@\n         ((StarLightLightingProvider)lightengine).starlight$serverRelightChunks(chunks,\n             (final ChunkPos chunkPos) -> {\n                 ++relitChunks[0];\n-                sender.getBukkitEntity().sendMessage(text().color(DARK_AQUA).append(\n-                    text(\"Relit chunk \", BLUE), text(chunkPos.toString()),\n-                    text(\", progress: \", BLUE), text(ONE_DECIMAL_PLACES.get().format(100.0 * (double) (relitChunks[0]) / (double) pending[0]) + \"%\")\n+                // DivineMC start - Parchment: Make FixLight use action bar\n+                sender.getBukkitEntity().sendActionBar(text().color(DARK_AQUA).append(\n+                        text(\"Relighting Chunks: \", DARK_AQUA), text(chunkPos.toString()),\n+                        text(\" \" + relitChunks[0], net.kyori.adventure.text.format.NamedTextColor.YELLOW),\n+                        text(\"/\", DARK_AQUA),\n+                        text(pending[0] + \" \", net.kyori.adventure.text.format.NamedTextColor.YELLOW),\n+                        text(\"(\" + (int) (Math.round(100.0 * (double) (relitChunks[0]) / (double) pending[0])) + \"%)\", net.kyori.adventure.text.format.NamedTextColor.YELLOW)\n                 ));\n+                // DivineMC end - Parchment: Make FixLight use action bar\n             },\n             (final int totalRelit) -> {\n                 final long end = System.nanoTime();\n                 sender.getBukkitEntity().sendMessage(text().color(DARK_AQUA).append(\n-                    text(\"Relit \", BLUE), text(totalRelit),\n-                    text(\" chunks. Took \", BLUE), text(ONE_DECIMAL_PLACES.get().format(1.0e-6 * (end - start)) + \"ms\")\n-                ));\n+                    // DivineMC start - Parchment: Make FixLight use action bar\n+                    text(\"Relit \", DARK_AQUA), text(totalRelit, net.kyori.adventure.text.format.NamedTextColor.YELLOW),\n+                    text(\" chunks. Took \", DARK_AQUA), text(ONE_DECIMAL_PLACES.get().format(1.0e-6 * (end - start)) + \"ms\", net.kyori.adventure.text.format.NamedTextColor.YELLOW)\n+                )); // DivineMC end - Parchment: Make FixLight use action bar\n                 if (done != null) {\n                     done.run();\n                 }",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/advancements/Advancement.java.patch",
+      "bytes": 637,
+      "header": "--- a/net/minecraft/advancements/Advancement.java\n+++ b/net/minecraft/advancements/Advancement.java\n@@ -62,7 +_,7 @@\n         final AdvancementRequirements requirements,\n         final boolean sendsTelemetryEvent\n     ) {\n-        this(parent, display, rewards, Map.copyOf(criteria), requirements, sendsTelemetryEvent, display.map(Advancement::decorateName));\n+        this(parent, display, rewards, criteria, requirements, sendsTelemetryEvent, display.map(Advancement::decorateName)); // DivineMC - Mirai - skip cloning advancement criteria\n     }\n \n     private static DataResult<Advancement> validate(final Advancement advancement) {",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/core/BlockPos.java.patch",
+      "bytes": 1311,
+      "header": "--- a/net/minecraft/core/BlockPos.java\n+++ b/net/minecraft/core/BlockPos.java\n@@ -330,7 +_,18 @@\n         };\n     }\n \n+    // DivineMC start - lithium: cached_iterate_outwards\n+    private static final org.bxteam.divinemc.util.cache.IterateOutwardsCache ITERATE_OUTWARDS_CACHE = new org.bxteam.divinemc.util.cache.IterateOutwardsCache(50);\n+    private static final it.unimi.dsi.fastutil.longs.LongList HOGLIN_PIGLIN_CACHE = ITERATE_OUTWARDS_CACHE.getOrCompute(8, 4, 8);\n+    // DivineMC end - lithium: cached_iterate_outwards\n+\n     public static Iterable<BlockPos> withinManhattan(final BlockPos origin, final int reachX, final int reachY, final int reachZ) {\n+        // DivineMC start - lithium: cached_iterate_outwards\n+        if (origin != org.bxteam.divinemc.util.cache.IterateOutwardsCache.POS_ZERO) {\n+            final it.unimi.dsi.fastutil.longs.LongList positions = reachX == 8 && reachY == 4 && reachZ == 8 ? HOGLIN_PIGLIN_CACHE : ITERATE_OUTWARDS_CACHE.getOrCompute(reachX, reachY, reachZ);\n+            return new org.bxteam.divinemc.util.cache.LongList2BlockPosMutableIterable(origin, positions);\n+        }\n+        // DivineMC end - lithium: cached_iterate_outwards\n         int maxDepth = reachX + reachY + reachZ;\n         int originX = origin.getX();\n         int originY = origin.getY();",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/core/NonNullList.java.patch",
+      "bytes": 1584,
+      "header": "--- a/net/minecraft/core/NonNullList.java\n+++ b/net/minecraft/core/NonNullList.java\n@@ -12,23 +_,23 @@\n     private final @Nullable E defaultValue;\n \n     public static <E> NonNullList<E> create() {\n-        return new NonNullList<>(Lists.newArrayList(), null);\n+        return new NonNullList<>(new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(), null); // DivineMC - Optimize collections\n     }\n \n     public static <E> NonNullList<E> createWithCapacity(final int capacity) {\n-        return new NonNullList<>(Lists.newArrayListWithCapacity(capacity), null);\n+        return new NonNullList<>(new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(capacity), null); // DivineMC - Optimize collections\n     }\n \n     public static <E> NonNullList<E> withSize(final int size, final E defaultValue) {\n         Objects.requireNonNull(defaultValue);\n         Object[] objects = new Object[size];\n         Arrays.fill(objects, defaultValue);\n-        return new NonNullList<>(Arrays.asList((E[])objects), defaultValue);\n+        return new NonNullList<>(new it.unimi.dsi.fastutil.objects.ObjectArrayList<>((E[])objects), defaultValue); // DivineMC - Optimize collections\n     }\n \n     @SafeVarargs\n     public static <E> NonNullList<E> of(final E defaultValue, final E... values) {\n-        return new NonNullList<>(Arrays.asList(values), defaultValue);\n+        return new NonNullList<>(new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(values), defaultValue); // DivineMC - Optimize collections\n     }\n \n     protected NonNullList(final List<E> list, final @Nullable E defaultValue) {",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/dedicated/DedicatedServer.java.patch",
+      "bytes": 3886,
+      "header": "--- a/net/minecraft/server/dedicated/DedicatedServer.java\n+++ b/net/minecraft/server/dedicated/DedicatedServer.java\n@@ -270,6 +_,26 @@\n         org.purpurmc.purpur.PurpurConfig.registerCommands();\n         */// Purpur end - Purpur config files // Purpur end - Migrate Setting to reintroduce end void rings\n         com.destroystokyo.paper.VersionHistoryManager.INSTANCE.getClass(); // Paper - load version history now\n+ \n+        // DivineMC start - Pufferfish: SIMD Support\n+        try {\n+            gg.pufferfish.pufferfish.simd.SIMDDetection.isEnabled = gg.pufferfish.pufferfish.simd.SIMDDetection.canEnable(LOGGER);\n+            gg.pufferfish.pufferfish.simd.SIMDDetection.versionLimited = gg.pufferfish.pufferfish.simd.SIMDDetection.getJavaVersion() < gg.pufferfish.pufferfish.simd.SIMDDetection.MIN_JAVA_VERSION || gg.pufferfish.pufferfish.simd.SIMDDetection.getJavaVersion() > gg.pufferfish.pufferfish.simd.SIMDDetection.MAX_JAVA_VERSION;\n+        } catch (final NoClassDefFoundError | Exception ignored) {\n+            ignored.printStackTrace();\n+        }\n+\n+        if (gg.pufferfish.pufferfish.simd.SIMDDetection.isEnabled) {\n+            LOGGER.info(\"SIMD operations detected as functional. Will replace some operations with faster versions.\");\n+        } else if (gg.pufferfish.pufferfish.simd.SIMDDetection.versionLimited) {\n+            LOGGER.warn(\"Will not enable SIMD! These optimizations are only safely supported on Java {}-{}\", gg.pufferfish.pufferfish.simd.SIMDDetection.MIN_JAVA_VERSION, gg.pufferfish.pufferfish.simd.SIMDDetection.MAX_JAVA_VERSION);\n+        } else {\n+            LOGGER.warn(\"SIMD operations are available for your server, but are not configured!\");\n+            LOGGER.warn(\"To enable additional optimizations, add \\\"--add-modules=jdk.incubator.vector\\\" to your startup flags, BEFORE the \\\"-jar\\\".\");\n+            LOGGER.warn(\"If you have already added this flag, then SIMD operations are not supported on your JVM or CPU.\");\n+            LOGGER.warn(\"Debug: Java: {}, test run: {}\", System.getProperty(\"java.version\"), gg.pufferfish.pufferfish.simd.SIMDDetection.testRun);\n+        }\n+        // DivineMC end - Pufferfish: SIMD Support\n \n         // this.worldData.setGameType(properties.gameMode.get()); // CraftBukkit - moved to world loading\n         LOGGER.info(\"Default game type: {}\", properties.gameMode.get());\n@@ -346,7 +_,7 @@\n         String proxyFlavor = (io.papermc.paper.configuration.GlobalConfiguration.get().proxies.velocity.enabled) ? \"Velocity\" : \"BungeeCord\";\n         String proxyLink = (io.papermc.paper.configuration.GlobalConfiguration.get().proxies.velocity.enabled) ? \"https://docs.papermc.io/velocity/security\" : \"http://www.spigotmc.org/wiki/firewall-guide/\";\n         // Paper end - Add Velocity IP Forwarding Support\n-        if (!this.usesAuthentication()) {\n+        if (!this.usesAuthentication() && (!io.papermc.paper.configuration.GlobalConfiguration.get().proxies.velocity.enabled || !io.papermc.paper.configuration.GlobalConfiguration.get().proxies.velocity.onlineMode)) { // DivineMC - Disable offline warn if using proxy and proxy online mode\n             LOGGER.warn(\"**** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!\");\n             LOGGER.warn(\"The server will make no attempt to authenticate usernames. Beware.\");\n             // Spigot start\n@@ -360,7 +_,11 @@\n             }\n             // Spigot end\n             LOGGER.warn(\"To change this, set \\\"online-mode\\\" to \\\"true\\\" in the server.properties file.\");\n+        // DivineMC start - Disable offline warn if using proxy and proxy online mode\n+        } else if (!this.usesAuthentication()) {\n+            LOGGER.info(\"Server is configured to use a proxy (online mode will be handled by the proxy).\");\n         }\n+        // DivineMC end - Disable offline warn if using proxy and proxy online mode\n \n         // CraftBukkit start\n         /*",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/level/ChunkMap.java.patch",
+      "bytes": 820,
+      "header": "--- a/net/minecraft/server/level/ChunkMap.java\n+++ b/net/minecraft/server/level/ChunkMap.java\n@@ -1402,7 +_,7 @@\n                     && ChunkMap.this.isChunkTracked(player, this.entity.chunkPosition().x(), this.entity.chunkPosition().z());\n                 // Paper end - Configurable entity tracking range by Y\n                 // CraftBukkit start - respect vanish API\n-                if (visibleToPlayer && !player.getBukkitEntity().canSee(this.entity.getBukkitEntity())) { // Paper - only consider hits\n+                if (visibleToPlayer && !player.getBukkitEntity().canSeeChunkMapUpdatePlayer(this.entity.getBukkitEntity())) { // Paper - only consider hits // DivineMC - SparklyPaper: Optimize \"canSee\" checks\n                     visibleToPlayer = false;\n                 }\n                 // CraftBukkit end",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/level/ServerChunkCache.java.patch",
+      "bytes": 1066,
+      "header": "--- a/net/minecraft/server/level/ServerChunkCache.java\n+++ b/net/minecraft/server/level/ServerChunkCache.java\n@@ -583,8 +_,10 @@\n             this.chunkMap.collectSpawningChunks(spawningChunks);\n             profiler.popPush(\"shuffleSpawningChunks\");\n             // Paper start - chunk tick iteration optimisation\n-            this.shuffleRandom.setSeed(this.level.getRandom().nextLong());\n-            if (!this.level.paperConfig().entities.spawning.perPlayerMobSpawns) Util.shuffle(spawningChunks, this.level.getRandom()); // Paper - Optional per player mob spawns; do not need this when per-player is enabled\n+            if (!this.level.paperConfig().entities.spawning.perPlayerMobSpawns) {\n+                this.shuffleRandom.setSeed(this.level.getRandom().nextLong());\n+                Util.shuffle(spawningChunks, this.level.getRandom()); // Paper - Optional per player mob spawns; do not need this when per-player is enabled\n+            }\n             // Paper end - chunk tick iteration optimisation\n             profiler.popPush(\"tickSpawningChunks\");",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/level/ServerLevel.java.patch",
+      "bytes": 4424,
+      "header": "--- a/net/minecraft/server/level/ServerLevel.java\n+++ b/net/minecraft/server/level/ServerLevel.java\n@@ -773,8 +_,13 @@\n     public int getNextEntityId() {\n         int id = 0;\n \n-        while (id == 0 || this.chunkSource.hasEntityWithId(id)) {\n+        while (id <= 0 || this.chunkSource.hasEntityWithId(id)) { // DivineMC - Prevent Entity ID counter overflow\n             id = ENTITY_COUNTER.incrementAndGet();\n+            // DivineMC start - Prevent Entity ID counter overflow\n+            if (id <= 0) {\n+                ENTITY_COUNTER.set(0);\n+            }\n+            // DivineMC end - Prevent Entity ID counter overflow\n         }\n \n         return id;\n@@ -981,9 +_,10 @@\n     // Paper start - optimise random ticking\n     private final ca.spottedleaf.moonrise.common.util.SimpleThreadUnsafeRandom simpleRandom = new ca.spottedleaf.moonrise.common.util.SimpleThreadUnsafeRandom(net.minecraft.world.level.levelgen.RandomSupport.generateUniqueSeed());\n \n+    // DivineMC start - Optimize level ticking\n     private void optimiseRandomTick(final LevelChunk chunk, final int tickSpeed) {\n         final LevelChunkSection[] sections = chunk.getSections();\n-        final int minSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection((ServerLevel)(Object)this);\n+        final int minSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection(this); // DivineMC - Optimize level ticking\n         final ca.spottedleaf.moonrise.common.util.SimpleThreadUnsafeRandom simpleRandom = this.simpleRandom;\n         final boolean doubleTickFluids = !ca.spottedleaf.moonrise.common.PlatformHooks.get().configFixMC224294();\n \n@@ -992,42 +_,38 @@\n         final int offsetZ = cpos.z() << 4;\n \n         for (int sectionIndex = 0, sectionsLen = sections.length; sectionIndex < sectionsLen; sectionIndex++) {\n-            final int offsetY = (sectionIndex + minSection) << 4;\n             final LevelChunkSection section = sections[sectionIndex];\n+            if (!section.isRandomlyTickingBlocks()) continue;\n+            final int offsetY = (sectionIndex + minSection) << 4;\n             final net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.world.level.block.state.BlockState> states = section.getStates();\n-            if (!section.isRandomlyTickingBlocks()) {\n-                continue;\n-            }\n \n-            final ca.spottedleaf.moonrise.common.list.ShortList tickList = ((ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection)section).moonrise$getTickingBlockList();\n+            final ca.spottedleaf.moonrise.common.list.ShortList tickList = section.moonrise$getTickingBlockList();\n \n             for (int i = 0; i < tickSpeed; ++i) {\n-                final int tickingBlocks = tickList.size();\n                 final int index = simpleRandom.nextInt() & ((16 * 16 * 16) - 1);\n \n-                if (index >= tickingBlocks) {\n+                if (index >= tickList.size()) {\n                     // most of the time we fall here\n                     continue;\n                 }\n \n-                final int location = (int)tickList.getRaw(index) & 0xFFFF;\n+                final int location = tickList.getRaw(index);\n                 final BlockState state = states.get(location);\n \n                 // do not use a mutable pos, as some random tick implementations store the input without calling immutable()!\n-                final BlockPos pos = new BlockPos((location & 15) | offsetX, ((location >>> (4 + 4)) & 15) | offsetY, ((location >>> 4) & 15) | offsetZ);\n+                final BlockPos pos = new BlockPos((location & 15) | offsetX, (location >>> (4 + 4)) | offsetY, ((location >>> 4) & 15) | offsetZ);\n \n-                state.randomTick((ServerLevel)(Object)this, pos, simpleRandom);\n+                state.randomTick(this, pos, simpleRandom);\n                 if (doubleTickFluids) {\n                     final FluidState fluidState = state.getFluidState();\n                     if (fluidState.isRandomlyTicking()) {\n-                        fluidState.randomTick((ServerLevel)(Object)this, pos, simpleRandom);\n+                        fluidState.randomTick(this, pos, simpleRandom);\n                     }\n                 }\n             }\n         }\n-\n-        return;\n     }\n+    // DivineMC end - Optimize level ticking\n     // Paper end - optimise random ticking\n \n     public void tickChunk(final LevelChunk chunk, final int tickSpeed) {",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/level/ServerPlayer.java.patch",
+      "bytes": 575,
+      "header": "--- a/net/minecraft/server/level/ServerPlayer.java\n+++ b/net/minecraft/server/level/ServerPlayer.java\n@@ -2728,7 +_,11 @@\n     @Override\n     public void swing(final InteractionHand hand) {\n         super.swing(hand);\n-        this.resetAttackStrengthTicker();\n+        // DivineMC start - Fix MC-118740\n+        if (hand == InteractionHand.MAIN_HAND && org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc118740) {\n+            this.resetAttackStrengthTicker();\n+        }\n+        // DivineMC end - Fix MC-118740\n     }\n \n     public boolean isChangingDimension() {",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.FixesCategory.fixMc118740"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/MinecraftServer.java.patch",
+      "bytes": 1508,
+      "header": "--- a/net/minecraft/server/MinecraftServer.java\n+++ b/net/minecraft/server/MinecraftServer.java\n@@ -1015,6 +_,13 @@\n             if (this.hasStopped) return;\n             this.hasStopped = true;\n         }\n+        // DivineMC start - Respawn players that were dead on server restart\n+        for (ServerPlayer player : this.playerList.players) {\n+            if (player.isDeadOrDying() || (player.isRemoved() && player.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.KILLED)) {\n+                this.playerList.respawn(player, false, net.minecraft.world.entity.Entity.RemovalReason.KILLED, org.bukkit.event.player.PlayerRespawnEvent.RespawnReason.DEATH);\n+            }\n+        }\n+        // DivineMC end - Respawn players that were dead on server restart\n         if (!this.hasLoggedStop && this.isDebugging()) io.papermc.paper.util.TraceUtil.dumpTraceForThread(\"Server stopped\"); // Paper - Debugging\n         this.shutdownThread = Thread.currentThread(); // Paper - Improved watchdog support\n         org.spigotmc.WatchdogThread.doStop(); // Paper - Improved watchdog support\n@@ -1108,6 +_,7 @@\n         // Paper end - rewrite chunk system\n         // Paper start - Improved watchdog support - move final shutdown items here\n         Util.shutdownExecutors();\n+        org.bxteam.divinemc.async.ExecutorShutdown.shutdown(this); // DivineMC - Shutdown executors\n         this.onServerExit();\n         // Paper end - Improved watchdog support - move final shutdown items here\n     }",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/network/ServerGamePacketListenerImpl.java.patch",
+      "bytes": 1977,
+      "header": "--- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java\n+++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java\n@@ -328,6 +_,7 @@\n     private static final int MAX_SIGN_LINE_LENGTH = Integer.getInteger(\"Paper.maxSignLength\", 80); // Paper - Limit client sign length\n     private final io.papermc.paper.event.packet.ClientTickEndEvent tickEndEvent; // Paper - add client tick end event\n     public final io.papermc.paper.connection.PaperPlayerGameConnection playerGameConnection; // Paper\n+    public final org.leavesmc.leaves.protocol.syncmatica.exchange.ExchangeTarget exchangeTarget; // DivineMC - Leaves: Syncmatica Protocol\n \n     public ServerGamePacketListenerImpl(final MinecraftServer server, final Connection connection, final ServerPlayer player, final CommonListenerCookie cookie) {\n         super(server, connection, cookie);\n@@ -342,6 +_,7 @@\n         this.chatMessageChain = new FutureChain(server.chatExecutor); // CraftBukkit - async chat\n         this.tickEndEvent = new io.papermc.paper.event.packet.ClientTickEndEvent(player.getBukkitEntity()); // Paper - add client tick end event\n         this.playerGameConnection = new io.papermc.paper.connection.PaperPlayerGameConnection(this); // Paper\n+        this.exchangeTarget = new org.leavesmc.leaves.protocol.syncmatica.exchange.ExchangeTarget(this); // DivineMC - Leaves: Syncmatica Protocol\n     }\n \n     // Paper start - configuration phase API\n@@ -1129,6 +_,7 @@\n \n             this.send(new ClientboundSetHeldSlotPacket(inventory.getSelectedSlot()));\n             this.player.inventoryMenu.broadcastChanges();\n+            if (org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc28289) this.player.resetAttackStrengthTicker(); // DivineMC - Fix MC-28289\n             if (io.papermc.paper.configuration.GlobalConfiguration.get().unsupportedSettings.updateEquipmentOnPlayerActions) this.player.detectEquipmentUpdates(); // Paper - Force update attributes.\n         }\n     }",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.FixesCategory.fixMc28289"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/network/ServerStatusPacketListenerImpl.java.patch",
+      "bytes": 1248,
+      "header": "--- a/net/minecraft/server/network/ServerStatusPacketListenerImpl.java\n+++ b/net/minecraft/server/network/ServerStatusPacketListenerImpl.java\n@@ -37,7 +_,10 @@\n         } else {\n             this.hasRequestedStatus = true;\n             // this.connection.send(new ClientboundStatusResponsePacket(this.status)); // Paper\n-            if (net.minecraft.server.MinecraftServer.getServer().getStatus().version().isEmpty()) return; // Purpur - Fix 'outdated server' showing in ping before server fully boots - do not respond to pings before we know the protocol version\n+            // DivineMC start - Don't respond ping before start fully - rewritten Purpur patch (configurable)\n+            var status = net.minecraft.server.MinecraftServer.getServer().getStatus();\n+            if (org.bxteam.divinemc.config.DivineConfig.NetworkCategory.dontRespondPingBeforeStart && (status == null || status.version().isEmpty())) return;\n+            // DivineMC end - Don't respond ping before start fully - rewritten Purpur patch (configurable)\n             com.destroystokyo.paper.network.StandardPaperServerListPingEventImpl.processRequest(net.minecraft.server.MinecraftServer.getServer(), this.connection); // Paper - handle status request\n         }\n     }",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.NetworkCategory.dontRespondPingBeforeStart"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/PlayerAdvancements.java.patch",
+      "bytes": 1494,
+      "header": "--- a/net/minecraft/server/PlayerAdvancements.java\n+++ b/net/minecraft/server/PlayerAdvancements.java\n@@ -59,7 +_,7 @@\n     private @Nullable AdvancementHolder lastSelectedTab;\n     private boolean isFirstPacket = true;\n     private final Codec<PlayerAdvancements.Data> codec;\n-    private final Map<CriterionTrigger<?>, Map<PlayerAdvancements.TriggerInstanceKey, ? extends CriterionTriggerInstance>> activeTriggers = new IdentityHashMap<>();\n+    private final Map<CriterionTrigger<?>, Map<PlayerAdvancements.TriggerInstanceKey, ? extends CriterionTriggerInstance>> activeTriggers = new it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap<>(); // DivineMC - Use fastutil for criterion data\n \n     public PlayerAdvancements(\n         final DataFixer dataFixer, final PlayerList playerList, final ServerAdvancementManager manager, final Path playerSavePath, final ServerPlayer player\n@@ -210,6 +_,11 @@\n     }\n \n     public boolean revoke(final AdvancementHolder advancement, final String criterion) {\n+        // DivineMC start - Spectator don't get advancements\n+        if (this.player.level().divineConfig.spectatorDontGetAdvancement && player.gameMode.getGameModeForPlayer() == net.minecraft.world.level.GameType.SPECTATOR) {\n+            return false;\n+        }\n+        // DivineMC end - Spectator don't get advancements\n         boolean result = false;\n         AdvancementProgress progress = this.getOrStartProgress(advancement);\n         boolean wasDone = progress.isDone();",
+      "touched_files": [],
+      "config_references": [
+        "divineConfig.spectatorDontGetAdvancement"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/players/PlayerList.java.patch",
+      "bytes": 829,
+      "header": "--- a/net/minecraft/server/players/PlayerList.java\n+++ b/net/minecraft/server/players/PlayerList.java\n@@ -1038,6 +_,7 @@\n         //player.connection.send(new ClientboundSetChunkCacheRadiusPacket(io.papermc.paper.FeatureHooks.getViewDistance(level))); // Paper - rewrite chunk system\n         //player.connection.send(new ClientboundSetSimulationDistancePacket(io.papermc.paper.FeatureHooks.getSimulationDistance(level))); // Paper - rewrite chunk system\n         // Paper end - view distances\n+        org.leavesmc.leaves.protocol.XaeroMapProtocol.onSendWorldInfo(player); // DivineMC - Leaves: Xaero's Map Protocol\n         if (level.isRaining()) {\n             // CraftBukkit start - handle player weather\n             // player.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.START_RAINING, 0.0F));",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/server/rcon/RconConsoleSource.java.patch",
+      "bytes": 387,
+      "header": "--- a/net/minecraft/server/rcon/RconConsoleSource.java\n+++ b/net/minecraft/server/rcon/RconConsoleSource.java\n@@ -60,7 +_,7 @@\n \n     @Override\n     public void sendSystemMessage(final Component message) {\n-        this.buffer.append(message.getString());\n+        this.buffer.append(message.getString()).append(System.lineSeparator()); // DivineMC - Fix MC-7569\n     }\n \n     @Override",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/stats/ServerStatsCounter.java.patch",
+      "bytes": 1164,
+      "header": "--- a/net/minecraft/stats/ServerStatsCounter.java\n+++ b/net/minecraft/stats/ServerStatsCounter.java\n@@ -109,12 +_,6 @@\n         this.dirty.add(stat);\n     }\n \n-    private Set<Stat<?>> getDirty() {\n-        Set<Stat<?>> result = Sets.newHashSet(this.dirty);\n-        this.dirty.clear();\n-        return result;\n-    }\n-\n     public void parse(final DataFixer fixerUpper, final JsonElement element) {\n         Dynamic<JsonElement> data = new Dynamic<>(JsonOps.INSTANCE, element);\n         data = DataFixTypes.STATS.updateToCurrentVersion(fixerUpper, data, NbtUtils.getDataVersion(data, 1343));\n@@ -140,9 +_,11 @@\n     public void sendStats(final ServerPlayer player) {\n         Object2IntMap<Stat<?>> statsToSend = new Object2IntOpenHashMap<>();\n \n-        for (Stat<?> stat : this.getDirty()) {\n+        for (Stat<?> stat : this.dirty) { // DivineMC - SparklyPaper: Skip dirty stats copy when requesting player stats\n             statsToSend.put(stat, this.getValue(stat));\n         }\n+\n+        this.dirty.clear(); // DivineMC - SparklyPaper: Clear dirty stats after copying\n \n         player.connection.send(new ClientboundAwardStatsPacket(statsToSend));\n     }",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/ai/goal/target/HurtByTargetGoal.java.patch",
+      "bytes": 473,
+      "header": "--- a/net/minecraft/world/entity/ai/goal/target/HurtByTargetGoal.java\n+++ b/net/minecraft/world/entity/ai/goal/target/HurtByTargetGoal.java\n@@ -111,6 +_,7 @@\n     }\n \n     protected void alertOther(final Mob other, final LivingEntity hurtByMob) {\n+        if (other == hurtByMob) return; // DivineMC - Fix MC-110386\n         other.setTarget(hurtByMob, org.bukkit.event.entity.EntityTargetEvent.TargetReason.TARGET_ATTACKED_NEARBY_ENTITY); // CraftBukkit - reason\n     }\n }",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/ai/navigation/WallClimberNavigation.java.patch",
+      "bytes": 1256,
+      "header": "--- a/net/minecraft/world/entity/ai/navigation/WallClimberNavigation.java\n+++ b/net/minecraft/world/entity/ai/navigation/WallClimberNavigation.java\n@@ -44,11 +_,11 @@\n             super.tick();\n         } else {\n             if (this.pathToPosition != null) {\n-                if (!this.pathToPosition.closerToCenterThan(this.mob.position(), this.mob.getBbWidth())\n+                if (!this.pathToPosition.closerToCenterThan(this.mob.position(), org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc94054 ? Math.max(this.mob.getBbWidth(), 1.0F) : this.mob.getBbWidth()) // DivineMC - Fix MC-94054\n                     && (\n                         !(this.mob.getY() > this.pathToPosition.getY())\n                             || !BlockPos.containing(this.pathToPosition.getX(), this.mob.getY(), this.pathToPosition.getZ())\n-                                .closerToCenterThan(this.mob.position(), this.mob.getBbWidth())\n+                                .closerToCenterThan(this.mob.position(), org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc94054 ? Math.max(this.mob.getBbWidth(), 1.0F) : this.mob.getBbWidth()) // DivineMC - Fix MC-94054\n                     )) {\n                     this.mob\n                         .getMoveControl()",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.FixesCategory.fixMc94054"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java.patch",
+      "bytes": 1034,
+      "header": "--- a/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java\n+++ b/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java\n@@ -22,6 +_,12 @@\n \n     @Override\n     protected void doTick(final ServerLevel level, final Villager body) {\n+        // DivineMC start - lithium: skip useless secondary poi sensor\n+        if (org.bxteam.divinemc.config.DivineConfig.PerformanceCategory.skipUselessSecondaryPoiSensor && body.getVillagerData().profession().value().secondaryPoi().isEmpty()) {\n+            body.getBrain().eraseMemory(MemoryModuleType.SECONDARY_JOB_SITE);\n+            return;\n+        }\n+        // DivineMC end - lithium: skip useless secondary poi sensor\n         // Purpur start - Option for Villager Clerics to farm Nether Wart - make sure clerics don't wander to soul sand when the option is off\n         Brain<?> brain = body.getBrain();\n         if (!level.purpurConfig.villagerClericsFarmWarts && body.getVillagerData().profession().is(net.minecraft.world.entity.npc.villager.VillagerProfession.CLERIC)) {",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.skipUselessSecondaryPoiSensor"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/Entity.java.patch",
+      "bytes": 4305,
+      "header": "--- a/net/minecraft/world/entity/Entity.java\n+++ b/net/minecraft/world/entity/Entity.java\n@@ -391,6 +_,7 @@\n     public long activatedTick = Integer.MIN_VALUE;\n     public boolean isTemporarilyActive;\n     public long activatedImmunityTick = Integer.MIN_VALUE;\n+    private boolean boundingBoxChanged = false; // DivineMC - VMP: skip entity move if movement is zero\n \n     public void inactiveTick() {\n     }\n@@ -1168,6 +_,7 @@\n     // Paper end - detailed watchdog information\n \n     public void move(final MoverType moverType, Vec3 delta) {\n+        if (!this.boundingBoxChanged && delta.equals(Vec3.ZERO)) return; // DivineMC - VMP: skip entity move if movement is zero\n         final Vec3 originalMovement = delta; // Paper - Expose pre-collision velocity\n         // Paper start - detailed watchdog information\n         ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(\"Cannot move an entity off-main\");\n@@ -1326,6 +_,14 @@\n                 restitution = !(-currentMovement.y < this.getEffectiveGravity()) && !this.isSuppressingBounce() && !effectState.is(BlockTags.SUPPRESSES_BOUNCE)\n                     ? Math.max(restitution, this.getBlockBounciness(effectState.getBlock()))\n                     : 0.0;\n+                // DivineMC start - Carpet-Fixes: Fix Slime Block Bounce Logic\n+                if (org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixIncorrectBounceLogic\n+                    && restitution > 0.0\n+                    && currentMovement.y < 0.0\n+                    && effectState.is(Blocks.SLIME_BLOCK)) {\n+                    this.setOnGround(currentMovement.y > -0.15);\n+                }\n+                // DivineMC end - Carpet-Fixes: Fix Slime Block Bounce Logic\n             }\n \n             double gravityCompensation;\n@@ -2764,6 +_,7 @@\n             }\n \n             this.addAdditionalSaveData(output, includeAll); // CraftBukkit - pass on includeAll\n+            if (org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc2025) output.store(\"AABB\", org.bxteam.divinemc.util.Codecs.AABB_CODEC, this.getBoundingBox()); // DivineMC - Fix MC-2025\n             if (this.isVehicle()) {\n                 ValueOutput.ValueOutputList passengersList = output.childrenList(\"Passengers\");\n \n@@ -2875,6 +_,7 @@\n                 this.tags.clear();\n                 input.read(\"Tags\", TAG_LIST_CODEC).ifPresent(this.tags::addAll);\n                 this.readAdditionalSaveData(input);\n+                if (org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc2025) input.read(\"AABB\", org.bxteam.divinemc.util.Codecs.AABB_CODEC).ifPresent(this::setBoundingBox); // DivineMC - Fix MC-2025\n                 if (this.repositionEntityAfterLoad()) {\n                     this.reapplyPosition();\n                 }\n@@ -3628,6 +_,7 @@\n         } else if (this.level.purpurConfig.entitiesCanUsePortals || this instanceof ServerPlayer) { // Purpur - Entities can use portals\n             if (this.portalProcess == null || !this.portalProcess.isSamePortal(portal)) {\n                 this.portalProcess = new PortalProcessor(portal, pos.immutable());\n+                org.bxteam.divinemc.async.world.PortalSearchPrefetcher.onPortalEnter(this, portal); // DivineMC - Async portal pre-search\n             } else if (!this.portalProcess.isInsidePortalThisTick()) {\n                 this.portalProcess.updateEntryPosition(pos.immutable());\n                 this.portalProcess.setAsInsidePortalThisTick(true);\n@@ -4382,6 +_,7 @@\n     }\n \n     public boolean canTeleport(final Level from, final Level to) {\n+        if (!from.divineConfig.allowEntityPortalWithPassenger && (this.isPassenger() || this.isVehicle())) return false; // DivineMC - Allow entity teleport with passenger\n         if (!this.isAlive() || !this.valid) return false; // Paper - Fix item duplication and teleport issues\n         if (from.dimension() == Level.END && to.dimension() == Level.OVERWORLD) {\n             for (Entity passenger : this.getPassengers()) {\n@@ -4647,6 +_,7 @@\n     }\n \n     public final void setBoundingBox(final AABB bb) {\n+        if (!this.bb.equals(bb)) this.boundingBoxChanged = true; // DivineMC - VMP: skip entity move if movement is zero\n         // CraftBukkit start - block invalid bounding boxes\n         double minX = bb.minX,\n                 minY = bb.minY,",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.FixesCategory.fixIncorrectBounceLogic",
+        "DivineConfig.FixesCategory.fixMc2025",
+        "divineConfig.allowEntityPortalWithPassenger"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/LivingEntity.java.patch",
+      "bytes": 2140,
+      "header": "--- a/net/minecraft/world/entity/LivingEntity.java\n+++ b/net/minecraft/world/entity/LivingEntity.java\n@@ -771,6 +_,7 @@\n \n         super.remove(reason, eventCause); // CraftBukkit\n         this.brain.clearMemories();\n+        this.combatTracker.resetCombatState(); // DivineMC - Fix MC-298464 (by HaHaWTH)\n     }\n \n     @Override\n@@ -1444,7 +_,7 @@\n                 player.setRealHealth(health);\n             }\n \n-            player.updateScaledHealth(false);\n+            this.entityData.set(LivingEntity.DATA_HEALTH_ID, player.getScaledHealth()); // DivineMC - Fix sprint glitch\n             return;\n         }\n         // CraftBukkit end\n@@ -2853,6 +_,7 @@\n     }\n \n     protected void updateSwingTime() {\n+        if (!this.swinging && this.swingTime == 0) return; // DivineMC - lithium: entity.fast_hand_swing\n         int currentSwingDuration = this.getCurrentSwingDuration();\n         if (this.swinging) {\n             this.swingTime++;\n@@ -3431,7 +_,13 @@\n     }\n \n     protected float getFlyingSpeed() {\n-        return this.getControllingPassenger() instanceof Player ? this.getSpeed() * 0.1F : 0.02F;\n+        // DivineMC start - Fix MC-172801\n+        float flyingSpeed = 0.02F;\n+        if (this.getAttributes().hasAttribute(Attributes.FLYING_SPEED)) {\n+            flyingSpeed = (float) (this.getAttribute(Attributes.FLYING_SPEED).getValue() * 0.049999999254942D);\n+        }\n+        return this.getControllingPassenger() instanceof net.minecraft.world.entity.player.Player ? this.getSpeed() * 0.1F : flyingSpeed;\n+        // DivineMC end - Fix MC-172801\n     }\n \n     public float getSpeed() {\n@@ -3971,6 +_,7 @@\n     protected void updateFallFlying() {\n         this.checkFallDistanceAccumulation();\n         if (!this.level().isClientSide()) {\n+            if (!this.isFallFlying() && this.fallFlyTicks == 0) return; // DivineMC - lithium: entity.fast_elytra_check\n             if (!this.canGlide()) {\n                 if (this.getSharedFlag(Entity.FLAG_FALL_FLYING) && !CraftEventFactory.callToggleGlideEvent(this, false).isCancelled()) // CraftBukkit\n                 this.setSharedFlag(Entity.FLAG_FALL_FLYING, false);",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/Mob.java.patch",
+      "bytes": 446,
+      "header": "--- a/net/minecraft/world/entity/Mob.java\n+++ b/net/minecraft/world/entity/Mob.java\n@@ -353,6 +_,8 @@\n             this.playAmbientSound();\n         }\n \n+        if (org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc183990 && this.target != null && this.target.isDeadOrDying()) this.setTarget(null); // DivineMC - Fix MC-183990\n+\n         profiler.pop();\n         incrementTicksSinceLastInteraction(); // Purpur - Entity lifespan\n     }",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.FixesCategory.fixMc183990"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/monster/zombie/ZombieVillager.java.patch",
+      "bytes": 921,
+      "header": "--- a/net/minecraft/world/entity/monster/zombie/ZombieVillager.java\n+++ b/net/minecraft/world/entity/monster/zombie/ZombieVillager.java\n@@ -344,6 +_,12 @@\n                 if (!this.isSilent()) {\n                     level.levelEvent(null, LevelEvent.SOUND_ZOMBIE_CONVERTED, this.blockPosition(), 0);\n                 }\n+\n+                // DivineMC start - Fix MC-200418\n+                if (org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc200418 && villager.isPassenger() && villager.getVehicle() instanceof net.minecraft.world.entity.animal.chicken.Chicken && villager.isBaby()) {\n+                    villager.removeVehicle();\n+                }\n+                // DivineMC end - Fix MC-200418\n                 // CraftBukkit start\n             }, org.bukkit.event.entity.EntityTransformEvent.TransformReason.CURED, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CURED // CraftBukkit\n         );",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.FixesCategory.fixMc200418"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/player/Player.java.patch",
+      "bytes": 491,
+      "header": "--- a/net/minecraft/world/entity/player/Player.java\n+++ b/net/minecraft/world/entity/player/Player.java\n@@ -1754,6 +_,7 @@\n     }\n \n     public void causeFoodExhaustion(final float amount, final org.bukkit.event.entity.EntityExhaustionEvent.ExhaustionReason reason) {\n+        if (this.level().getDifficulty() == Difficulty.PEACEFUL) return; // DivineMC - Fix MC-31819\n         // CraftBukkit end\n         if (!this.abilities.invulnerable) {\n             if (!this.level().isClientSide()) {",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/raid/Raid.java.patch",
+      "bytes": 724,
+      "header": "--- a/net/minecraft/world/entity/raid/Raid.java\n+++ b/net/minecraft/world/entity/raid/Raid.java\n@@ -539,7 +_,7 @@\n             double x3 = playerLoc.x + 13.0 / distBtwn * (raidLoc.x - playerLoc.x);\n             double z3 = playerLoc.z + 13.0 / distBtwn * (raidLoc.z - playerLoc.z);\n             if (distBtwn <= 64.0 || playersInRaid.contains(player)) {\n-                player.connection.send(new ClientboundSoundPacket(SoundEvents.RAID_HORN, SoundSource.NEUTRAL, x3, player.getY(), z3, 64.0F, 1.0F, seed));\n+                player.connection.send(new ClientboundSoundPacket(SoundEvents.RAID_HORN, SoundSource.HOSTILE, x3, player.getY(), z3, 64.0F, 1.0F, seed)); // DivineMC - Fix MC-245394\n             }\n         }\n     }",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/block/entity/BlockEntity.java.patch",
+      "bytes": 576,
+      "header": "--- a/net/minecraft/world/level/block/entity/BlockEntity.java\n+++ b/net/minecraft/world/level/block/entity/BlockEntity.java\n@@ -374,7 +_,7 @@\n \n     // CraftBukkit start - add method\n     public org.bukkit.inventory.@Nullable InventoryHolder getOwner() {\n-        return getOwner(true);\n+        return getOwner(org.bxteam.divinemc.config.DivineConfig.PerformanceCategory.createSnapshotOnRetrievingBlockState); // DivineMC - EMC: Don't use snapshots for acquiring blockstate;\n     }\n \n     public org.bukkit.inventory.@Nullable InventoryHolder getOwner(boolean useSnapshot) {",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.createSnapshotOnRetrievingBlockState"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/block/entity/HopperBlockEntity.java.patch",
+      "bytes": 856,
+      "header": "--- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java\n+++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java\n@@ -425,6 +_,11 @@\n \n         Direction direction = self.facing.getOpposite();\n         if (isFullContainer(container, direction)) {\n+            // DivineMC start - SparklyPaper: Allow throttling hopper checks if the target container is full\n+            if (org.bxteam.divinemc.config.DivineConfig.PerformanceCategory.hopperThrottleWhenFull && org.bxteam.divinemc.config.DivineConfig.PerformanceCategory.hopperThrottleSkipTicks > 0) {\n+                self.setCooldown(org.bxteam.divinemc.config.DivineConfig.PerformanceCategory.hopperThrottleSkipTicks);\n+            }\n+            // DivineMC end - SparklyPaper: Allow throttling hopper checks if the target container is full\n             return false;\n         }",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.hopperThrottleSkipTicks",
+        "DivineConfig.PerformanceCategory.hopperThrottleWhenFull"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/block/TripWireHookBlock.java.patch",
+      "bytes": 2498,
+      "header": "--- a/net/minecraft/world/level/block/TripWireHookBlock.java\n+++ b/net/minecraft/world/level/block/TripWireHookBlock.java\n@@ -187,7 +_,6 @@\n             if (!cancelledEmitterHook) { // Paper - Call BlockRedstoneEvent\n             emitState(level, pos, attached, powered, wasAttached, wasPowered);\n             if (!isBeingDestroyed) {\n-                if (io.papermc.paper.configuration.GlobalConfiguration.get().unsupportedSettings.skipTripwireHookPlacementValidation || level.getBlockState(pos).is(Blocks.TRIPWIRE_HOOK)) // Paper - Validate tripwire hook placement before update\n                 level.setBlock(pos, newState.setValue(FACING, direction), Block.UPDATE_ALL);\n                 if (canUpdate) {\n                     notifyNeighbors(block, level, pos, direction);\n@@ -200,10 +_,18 @@\n                     BlockPos testPos = pos.relative(direction, i);\n                     BlockState wireData = wireStates[i];\n                     if (wireData != null) {\n-                        BlockState testPosState = level.getBlockState(testPos);\n-                        if (testPosState.is(Blocks.TRIPWIRE) || testPosState.is(Blocks.TRIPWIRE_HOOK)) {\n-                            if (!io.papermc.paper.configuration.GlobalConfiguration.get().blockUpdates.disableTripwireUpdates || !testPosState.is(Blocks.TRIPWIRE)) level.setBlock(testPos, wireData.trySetValue(ATTACHED, attached), Block.UPDATE_ALL); // Paper - prevent tripwire from updating\n+                        // DivineMC start - Configurable MC-59471\n+                        if (level.divineConfig.allowTripwireDupe) {\n+                            level.setBlock(testPos, wireData.trySetValue(ATTACHED, attached), Block.UPDATE_ALL);\n+                            level.getBlockState(testPos);\n+                        } else {\n+                            BlockState testPosState = level.getBlockState(testPos);\n+                            if (testPosState.is(Blocks.TRIPWIRE) || testPosState.is(Blocks.TRIPWIRE_HOOK)) {\n+                                if (!io.papermc.paper.configuration.GlobalConfiguration.get().blockUpdates.disableTripwireUpdates || !testPosState.is(Blocks.TRIPWIRE))\n+                                    level.setBlock(testPos, wireData.trySetValue(ATTACHED, attached), Block.UPDATE_ALL); // Paper - prevent tripwire from updating\n+                            }\n                         }\n+                        // DivineMC end - Configurable MC-59471\n                     }\n                 }\n             }",
+      "touched_files": [],
+      "config_references": [
+        "divineConfig.allowTripwireDupe"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/chunk/LevelChunk.java.patch",
+      "bytes": 1687,
+      "header": "--- a/net/minecraft/world/level/chunk/LevelChunk.java\n+++ b/net/minecraft/world/level/chunk/LevelChunk.java\n@@ -85,7 +_,7 @@\n             return \"<null>\";\n         }\n     };\n-    private final Map<BlockPos, LevelChunk.RebindableTickingBlockEntityWrapper> tickersInLevel = Maps.newHashMap();\n+    private final Map<BlockPos, LevelChunk.RebindableTickingBlockEntityWrapper> tickersInLevel = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>(); // DivineMC - Optimize level ticking\n     private boolean loaded;\n     private final ServerLevel level; // CraftBukkit - type\n     private @Nullable Supplier<FullChunkStatus> fullStatus;\n@@ -278,11 +_,18 @@\n     public BlockState getBlockStateFinal(final int x, final int y, final int z) {\n         // Copied and modified from below\n         final int sectionIndex = this.getSectionIndex(y);\n-        if (sectionIndex < 0 || sectionIndex >= this.sections.length\n-            || this.sections[sectionIndex].nonEmptyBlockCount == 0) {\n-            return Blocks.AIR.defaultBlockState();\n-        }\n-        return this.sections[sectionIndex].getStates().get((y & 15) << 8 | (z & 15) << 4 | x & 15);\n+        // DivineMC start - Optimize block state lookup\n+        if (sectionIndex < 0 || sectionIndex >= this.sections.length) {\n+            return Blocks.AIR.defaultBlockState();\n+        }\n+\n+        final LevelChunkSection section = this.sections[sectionIndex];\n+        if (section.nonEmptyBlockCount == 0) {\n+            return Blocks.AIR.defaultBlockState();\n+        }\n+\n+        return section.states.get((y & 15) << 8 | (z & 15) << 4 | (x & 15));\n+        // DivineMC end - Optimize block state lookup\n     }\n \n     @Override",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/Level.java.patch",
+      "bytes": 5187,
+      "header": "--- a/net/minecraft/world/level/Level.java\n+++ b/net/minecraft/world/level/Level.java\n@@ -119,7 +_,7 @@\n         .add(new ExplosionParticleInfo(ParticleTypes.POOF, 0.5F, 1.0F))\n         .add(new ExplosionParticleInfo(ParticleTypes.SMOKE, 1.0F, 1.0F))\n         .build();\n-    public final List<TickingBlockEntity> blockEntityTickers = Lists.newArrayList();\n+    public final it.unimi.dsi.fastutil.objects.ObjectArrayList<TickingBlockEntity> blockEntityTickers = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(); // DivineMC - compact block entity tickers in place - Fix MC-117075\n     protected final CollectingNeighborUpdater neighborUpdater;\n     private final List<TickingBlockEntity> pendingBlockEntityTickers = Lists.newArrayList();\n     private boolean tickingBlockEntities;\n@@ -265,7 +_,7 @@\n     @Override\n     public final <T extends Entity> List<T> getEntitiesOfClass(final Class<T> entityClass, final AABB boundingBox, final Predicate<? super T> predicate) {\n         Profiler.get().incrementCounter(\"getEntities\");\n-        final List<T> ret = new java.util.ArrayList<>();\n+        final List<T> ret = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(); // DivineMC - Optimize collections\n \n         ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities(entityClass, null, boundingBox, ret, predicate);\n \n@@ -275,7 +_,7 @@\n     @Override\n     public final List<Entity> moonrise$getHardCollidingEntities(final Entity entity, final AABB box, final Predicate<? super Entity> predicate) {\n         Profiler.get().incrementCounter(\"getEntities\");\n-        final List<Entity> ret = new java.util.ArrayList<>();\n+        final List<Entity> ret = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(); // DivineMC - Optimize collections\n \n         ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getHardCollidingEntities(entity, box, ret, predicate);\n \n@@ -1541,26 +_,42 @@\n         boolean tickBlockEntities = this.tickRateManager().runsNormally();\n \n         int tickedEntities = 0; // Paper - rewrite chunk system\n-        // Paper start - Fix MC-117075 use removeAll\n-        final it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<@Nullable TickingBlockEntity> toRemove = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();\n-        toRemove.add(null);\n-        for (int tickerIndex = 0; tickerIndex < this.blockEntityTickers.size(); tickerIndex++) {\n-            final TickingBlockEntity ticker = this.blockEntityTickers.get(tickerIndex);\n-        // Paper end - Fix MC-117075 use removeAll\n-            if (ticker.isRemoved()) {\n-                toRemove.add(ticker); // Paper - Fix MC-117075 use removeAll\n-            } else if (tickBlockEntities && this.shouldTickBlocksAt(ticker.getPos())) {\n-                ticker.tick();\n-                // Paper start - rewrite chunk system\n-                if ((++tickedEntities & 7) == 0) {\n-                    ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)(Level)(Object)this).moonrise$midTickTasks();\n-                }\n-                // Paper end - rewrite chunk system\n-            }\n+        // DivineMC start - compact block entity tickers in place - Fix MC-117075\n+        int writeIndex = 0;\n+        int scanIndex = 0;\n+        try {\n+            while (scanIndex < this.blockEntityTickers.size()) {\n+                final TickingBlockEntity ticker = this.blockEntityTickers.get(scanIndex);\n+                if (!ticker.isRemoved()) {\n+                    if (tickBlockEntities && this.shouldTickBlocksAt(ticker.getPos())) {\n+                        ticker.tick();\n+                        // Paper start - rewrite chunk system\n+                        if ((++tickedEntities & 7) == 0) {\n+                            ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)(Level)(Object)this).moonrise$midTickTasks();\n+                        }\n+                        // Paper end - rewrite chunk system\n+                    }\n+\n+                    if (writeIndex != scanIndex) {\n+                        this.blockEntityTickers.set(writeIndex, ticker);\n+                    }\n+                    ++writeIndex;\n+                }\n+                ++scanIndex;\n+            }\n+        } finally {\n+            for (int size = this.blockEntityTickers.size(); scanIndex < size; ++scanIndex) {\n+                final TickingBlockEntity ticker = this.blockEntityTickers.get(scanIndex);\n+                if (writeIndex != scanIndex) {\n+                    this.blockEntityTickers.set(writeIndex, ticker);\n+                }\n+                ++writeIndex;\n+            }\n+\n+            this.blockEntityTickers.removeElements(writeIndex, this.blockEntityTickers.size());\n+            this.tickingBlockEntities = false;\n         }\n-\n-        this.blockEntityTickers.removeAll(toRemove); // Paper - Fix MC-117075 use removeAll\n-        this.tickingBlockEntities = false;\n+        // DivineMC end - compact block entity tickers in place - Fix MC-117075\n     }\n \n     public <T extends Entity> void guardEntityTick(final Consumer<T> tick, final T entity) {",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/levelgen/feature/OreFeature.java.patch",
+      "bytes": 587,
+      "header": "--- a/net/minecraft/world/level/levelgen/feature/OreFeature.java\n+++ b/net/minecraft/world/level/levelgen/feature/OreFeature.java\n@@ -69,7 +_,7 @@\n         final int sizeY\n     ) {\n         int placed = 0;\n-        BitSet tested = new BitSet(sizeXZ * sizeY * sizeXZ);\n+        BitSet tested = org.bxteam.divinemc.util.cache.CachedOrNewBitsGetter.getCachedOrNewBitSet(sizeXZ * sizeY * sizeXZ); // DivineMC - C2ME: Reduce Allocations\n         BlockPos.MutableBlockPos orePos = new BlockPos.MutableBlockPos();\n         int size = config.size;\n         double[] data = new double[size * 4];",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/levelgen/SurfaceRules.java.patch",
+      "bytes": 1411,
+      "header": "--- a/net/minecraft/world/level/levelgen/SurfaceRules.java\n+++ b/net/minecraft/world/level/levelgen/SurfaceRules.java\n@@ -491,6 +_,22 @@\n \n             @Override\n             protected boolean compute() {\n+                // DivineMC start - Fix MC-258859\n+                if (org.bxteam.divinemc.config.DivineConfig.FixesCategory.fixMc258859) {\n+                    int x = this.context.blockX & 15;\n+                    int z = this.context.blockZ & 15;\n+                    ChunkAccess chunk = this.context.chunk;\n+                    int south = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, Math.max(z - 1, 0));\n+                    int north = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, Math.min(z + 1, 15));\n+                    if (Math.abs(north - south) >= 4) {\n+                        return true;\n+                    } else {\n+                        int west = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, Math.max(x - 1, 0), z);\n+                        int east = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, Math.min(x + 1, 15), z);\n+                        return Math.abs(west - east) >= 4;\n+                    }\n+                }\n+                // DivineMC end - Fix MC-258859\n                 int chunkBlockX = this.context.blockX & 15;\n                 int chunkBlockZ = this.context.blockZ & 15;\n                 int zNorth = Math.max(chunkBlockZ - 1, 0);",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.FixesCategory.fixMc258859"
+      ]
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/LocalMobCapCalculator.java.patch",
+      "bytes": 1001,
+      "header": "--- a/net/minecraft/world/level/LocalMobCapCalculator.java\n+++ b/net/minecraft/world/level/LocalMobCapCalculator.java\n@@ -42,14 +_,14 @@\n     }\n \n     private static class MobCounts {\n-        private final Object2IntMap<MobCategory> counts = new Object2IntOpenHashMap<>(MobCategory.values().length);\n+        private final int[] counts = new int[MobCategory.values().length]; // DivineMC - VMP: store mob counts in an array\n \n         public void add(final MobCategory category) {\n-            this.counts.computeInt(category, (k, count) -> count == null ? 1 : count + 1);\n+            this.counts[category.ordinal()]++; // DivineMC - VMP: store mob counts in an array\n         }\n \n         public boolean canSpawn(final MobCategory category) {\n-            return this.counts.getOrDefault(category, 0) < category.getMaxInstancesPerChunk();\n+            return this.counts[category.ordinal()] < category.getMaxInstancesPerChunk(); // DivineMC - VMP: store mob counts in an array\n         }\n     }\n }",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/saveddata/maps/MapItemSavedData.java.patch",
+      "bytes": 438,
+      "header": "--- a/net/minecraft/world/level/saveddata/maps/MapItemSavedData.java\n+++ b/net/minecraft/world/level/saveddata/maps/MapItemSavedData.java\n@@ -157,6 +_,7 @@\n         }\n \n         this.vanillaRender.buffer = colors.array(); // Paper - Use Vanilla map renderer when possible\n+        this.setDirty(false); // DivineMC - SparklyPaper: Reset dirty flag when loading maps from the disk\n     }\n \n     public static MapItemSavedData createFresh(",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0001-Rebrand.patch",
+      "bytes": 15024,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 27 Jan 2025 01:35:41 +0300\nSubject: [PATCH] Rebrand",
+      "touched_files": [
+        "src/main/java/com/destroystokyo/paper/Metrics.java",
+        "src/main/java/com/destroystokyo/paper/console/PaperConsole.java",
+        "src/main/java/io/papermc/paper/PaperBootstrap.java",
+        "src/main/java/io/papermc/paper/PaperServerInternalAPIBridge.java",
+        "src/main/java/io/papermc/paper/ServerBuildInfoImpl.java",
+        "src/main/java/io/papermc/paper/SparksFly.java",
+        "src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java",
+        "src/main/java/org/spigotmc/WatchdogThread.java",
+        "src/main/resources/META-INF/services/ca.spottedleaf.moonrise.common.PlatformHooks"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0002-Configuration.patch",
+      "bytes": 3021,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 27 Jan 2025 20:53:24 +0300\nSubject: [PATCH] Configuration",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/CraftServer.java",
+        "src/main/java/org/bukkit/craftbukkit/Main.java"
+      ],
+      "config_references": [
+        "DivineConfig.init",
+        "divineConfig.init"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0003-Delete-timings.patch",
+      "bytes": 1562,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 27 Jan 2025 18:42:29 +0300\nSubject: [PATCH] Delete timings",
+      "touched_files": [
+        "src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java",
+        "src/main/java/io/papermc/paper/plugin/manager/PaperPluginManagerImpl.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0004-Delete-ReloadCommand.patch",
+      "bytes": 1188,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 2 Jul 2025 19:14:51 +0300\nSubject: [PATCH] Delete ReloadCommand",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/CraftServer.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0005-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
+      "bytes": 1969,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 23 Mar 2025 16:39:45 +0300\nSubject: [PATCH] Paper PR: Add FillBottleEvents for player and dispenser",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0006-Paper-PR-Player-standing-on-position-API.patch",
+      "bytes": 1428,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 23 Mar 2025 16:53:16 +0300\nSubject: [PATCH] Paper PR: Player standing on position API",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0007-Paper-PR-Throttle-failed-spawn-attempts.patch",
+      "bytes": 2337,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 27 Mar 2025 00:04:19 +0300\nSubject: [PATCH] Paper PR: Throttle failed spawn attempts\n\nOriginal license: GPLv3\nOriginal project: https://github.com/PaperMC/Paper\nPaper pull request: https://github.com/PaperMC/Paper/pull/11099\n\nExample config in paper-world-defaults.yml:\n```\n    spawning-throttle:\n      failed-attempts-threshold: 1200\n      throttled-ticks-per-spawn:\n        ambient: 10 # default value in bukkit.yml tickers-per * 10\n        axolotls: 10\n        creature: 4000\n        monster: 10\n        underground_water_creature: 10\n        water_ambient: 10\n        water_creature: 10\n```",
+      "touched_files": [
+        "src/main/java/io/papermc/paper/configuration/WorldConfiguration.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0008-Optimize-default-values-for-configs.patch",
+      "bytes": 2108,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 26 Apr 2025 23:43:59 +0300\nSubject: [PATCH] Optimize default values for configs",
+      "touched_files": [
+        "src/main/java/org/spigotmc/SpigotConfig.java",
+        "src/main/resources/configurations/bukkit.yml",
+        "src/main/resources/configurations/commands.yml"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0009-Configurable-files-locations-and-plugin-loading.patch",
+      "bytes": 8929,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: dan28000 <pirkldan28@gmail.com>\nDate: Thu, 12 Jun 2025 10:08:25 +0200\nSubject: [PATCH] Configurable files locations and plugin loading",
+      "touched_files": [
+        "src/main/java/com/destroystokyo/paper/console/PaperConsole.java",
+        "src/main/java/io/papermc/paper/plugin/PluginInitializerManager.java",
+        "src/main/java/org/bukkit/craftbukkit/Main.java",
+        "src/main/java/org/bukkit/craftbukkit/help/HelpYamlReader.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0010-SparklyPaper-Optimize-canSee-checks.patch",
+      "bytes": 3554,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 1 Feb 2025 19:52:39 +0300\nSubject: [PATCH] SparklyPaper: Optimize \"canSee\" checks\n\nOriginal project: https://github.com/SparklyPower/SparklyPaper\n\nPatch description:\n\nThe \"canSee\" checks is in a hot path, invoked by each entity for each player on the server if they are in tracking range, so optimizing it is pretty nice\nFirst, we change the original \"HashMap\" to fastutil's \"Object2ObjectOpenHashMap\", because the containsKey throughput is better\nThen, we add a \"isEmpty()\" check before attempting to check if the map contains something\nThis seems stupid, but it does seem that it improves the performance a bit, and it makes sense, \"containsKey(...)\" does not attempt to check the map size before attempting to check if the map contains the key\nWe also create a \"canSee\" method tailored for \"ChunkMap#updatePlayer()\", a method without the equals check (the \"updatePlayer()\" already checks if the entity is the same entity) because the CraftPlayer's `equals()` check is a *bit* expensive compared to only checking the object's identity, and because the identity has already been check, we don't need to check it twice.",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0011-Virtual-Threads.patch",
+      "bytes": 4876,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Mon, 24 Feb 2025 19:36:33 +0300\nSubject: [PATCH] Virtual Threads",
+      "touched_files": [
+        "src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java",
+        "src/main/java/io/papermc/paper/util/MCUtil.java",
+        "src/main/java/org/bukkit/craftbukkit/scheduler/CraftAsyncScheduler.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.virtualAsyncExecutor",
+        "DivineConfig.PerformanceCategory.virtualBukkitScheduler",
+        "DivineConfig.PerformanceCategory.virtualThreadsEnabled"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0012-Implement-Secure-Seed.patch",
+      "bytes": 2869,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Tue, 28 Jan 2025 00:54:57 +0300\nSubject: [PATCH] Implement Secure Seed\n\nOriginal license: GPLv3\nOriginal project: https://github.com/plasmoapp/matter",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/CraftChunk.java",
+        "src/main/java/org/bukkit/craftbukkit/CraftServer.java"
+      ],
+      "config_references": [
+        "DivineConfig.MiscCategory.enableSecureSeed"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0013-Pufferfish-Optimize-mob-spawning.patch",
+      "bytes": 2916,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 9 Jul 2025 03:01:38 +0300\nSubject: [PATCH] Pufferfish: Optimize mob spawning\n\nOriginal license: GPL v3\nOriginal project: https://github.com/pufferfish-gg/Pufferfish\n\nThis patch reduces the main-thread impact of mob spawning by moving spawning work to other threads",
+      "touched_files": [
+        "src/main/java/ca/spottedleaf/moonrise/common/list/IteratorSafeOrderedReferenceSet.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0014-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
+      "bytes": 1619,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 9 Jul 2025 03:07:19 +0300\nSubject: [PATCH] Pufferfish: Simpler ShapelessRecipes comparison for Vanilla\n\nOriginal license: GPL v3\nOriginal project: https://github.com/pufferfish-gg/Pufferfish\n\nPatch description:\n\nPaper added a fancy sorting comparison due to Bukkit recipes breaking\nthe vanilla one, however this is far more advanced than what you need\nfor all the vanilla recipes.",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/inventory/CraftShapelessRecipe.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0015-SparklyPaper-Parallel-world-ticking.patch",
+      "bytes": 35682,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 29 Jan 2025 01:41:25 +0300\nSubject: [PATCH] SparklyPaper: Parallel world ticking\n\nOriginal project: https://github.com/SparklyPower/SparklyPaper",
+      "touched_files": [
+        "src/main/java/ca/spottedleaf/moonrise/common/list/IteratorSafeOrderedReferenceSet.java",
+        "src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java",
+        "src/main/java/org/bukkit/craftbukkit/CraftServer.java",
+        "src/main/java/org/bukkit/craftbukkit/CraftWorld.java",
+        "src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java",
+        "src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java",
+        "src/main/java/org/bukkit/craftbukkit/block/CraftBlockState.java",
+        "src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.disableHardThrow",
+        "DivineConfig.AsyncCategory.enableParallelWorldTicking"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0016-Leaves-Protocol-Core.patch",
+      "bytes": 1724,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Thu, 10 Jul 2025 22:12:19 +0300\nSubject: [PATCH] Leaves: Protocol Core\n\nOriginal project: https://github.com/LeavesMC/Leaves\nOriginal license: GPLv3",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/CraftServer.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0017-Paper-PR-Fire-ServerListPingEvent-for-secondary-motd.patch",
+      "bytes": 2531,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 20 Jul 2025 16:10:25 +0300\nSubject: [PATCH] Paper PR: Fire ServerListPingEvent for secondary motd send\n\nOriginal license: GPLv3\nOriginal project: https://github.com/PaperMC/Paper\nPaper pull request: https://github.com/PaperMC/Paper/pull/8074",
+      "touched_files": [
+        "src/main/java/com/destroystokyo/paper/network/StandardPaperServerListPingEventImpl.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0018-Optimize-Moonrise.patch",
+      "bytes": 23868,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 9 Jul 2025 03:37:51 +0300\nSubject: [PATCH] Optimize Moonrise",
+      "touched_files": [
+        "src/main/java/ca/spottedleaf/moonrise/common/list/EntityList.java",
+        "src/main/java/ca/spottedleaf/moonrise/common/list/ReferenceList.java",
+        "src/main/java/ca/spottedleaf/moonrise/common/list/ShortList.java",
+        "src/main/java/ca/spottedleaf/moonrise/common/misc/Delayed26WayDistancePropagator3D.java",
+        "src/main/java/ca/spottedleaf/moonrise/common/misc/Delayed8WayDistancePropagator2D.java",
+        "src/main/java/ca/spottedleaf/moonrise/common/misc/SingleUserAreaMap.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0019-Implement-chunk-system-algorithm.patch",
+      "bytes": 3718,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Wed, 29 Oct 2025 01:31:51 +0300\nSubject: [PATCH] Implement chunk system algorithm\n\nThis patch adds configurable chunk system algorithms for determining\nworker thread allocation for chunk loading and generation.",
+      "touched_files": [
+        "src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseCommon.java",
+        "src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java"
+      ],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.chunkWorkerAlgorithm"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/features/0020-Regionized-Chunk-Ticking.patch",
+      "bytes": 5307,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 23 May 2026 21:35:25 +0300\nSubject: [PATCH] Regionized Chunk Ticking\n\nThis patch adds regionized chunk ticking feature, by grouping adjacent chunks into regions and processing each region on its own thread.\n\nOriginal idea by Dueris, modified by NONPLAYT and heavily optimized by dan28000",
+      "touched_files": [
+        "src/main/java/org/bukkit/craftbukkit/CraftWorld.java",
+        "src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.enableParallelWorldTicking"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/files/src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseConstants.java.patch",
+      "bytes": 784,
+      "header": "--- a/src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseConstants.java\n+++ b/src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseConstants.java\n@@ -9,7 +_,7 @@\n \n     private static final Logger LOGGER = LogUtils.getLogger();\n \n-    public static final int MAX_VIEW_DISTANCE = Integer.getInteger(PlatformHooks.get().getBrand() + \".MaxViewDistance\", 32);\n+    public static final int MAX_VIEW_DISTANCE = Integer.getInteger(PlatformHooks.get().getBrand() + \".MaxViewDistance\", org.bxteam.divinemc.config.DivineConfig.PerformanceCategory.maxViewDistance); // DivineMC - Configurable Max View Distance\n     public static final boolean NUMA_ENABLE;\n     static {\n         final boolean numaScheduling = Boolean.getBoolean(PlatformHooks.get().getBrand() + \".NumaScheduling\");",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.maxViewDistance"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/files/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java.patch",
+      "bytes": 512,
+      "header": "--- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java\n+++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java\n@@ -292,7 +_,7 @@\n \n     @Override\n     public org.bukkit.block.BlockState getState() {\n-        return CraftBlockStates.getBlockState(this);\n+        return CraftBlockStates.getBlockState(this, org.bxteam.divinemc.config.DivineConfig.PerformanceCategory.createSnapshotOnRetrievingBlockState); // DivineMC - EMC: Don't use snapshots for acquiring blockstate\n     }\n \n     @Override",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.createSnapshotOnRetrievingBlockState"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/files/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java.patch",
+      "bytes": 595,
+      "header": "--- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java\n+++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java\n@@ -188,7 +_,7 @@\n     }\n \n     public static BlockState getBlockState(Block block) {\n-        return CraftBlockStates.getBlockState(block, true);\n+        return CraftBlockStates.getBlockState(block, org.bxteam.divinemc.config.DivineConfig.PerformanceCategory.createSnapshotOnRetrievingBlockState); // DivineMC - EMC: Don't use snapshots for acquiring blockstate\n     }\n \n     public static BlockState getBlockState(Block block, boolean useSnapshot) {",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.PerformanceCategory.createSnapshotOnRetrievingBlockState"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/files/src/main/java/org/bukkit/craftbukkit/command/CraftCommandMap.java.patch",
+      "bytes": 860,
+      "header": "--- a/src/main/java/org/bukkit/craftbukkit/command/CraftCommandMap.java\n+++ b/src/main/java/org/bukkit/craftbukkit/command/CraftCommandMap.java\n@@ -14,4 +_,18 @@\n     public Map<String, Command> getKnownCommands() {\n         return this.knownCommands;\n     }\n+\n+    // DivineMC start - Force Minecraft command\n+    @Override\n+    public Command getCommand(String name) {\n+        Command target = super.getCommand(name);\n+        if (org.bxteam.divinemc.config.DivineConfig.FixesCategory.forceMinecraftCommand && !(target instanceof org.bukkit.craftbukkit.command.VanillaCommandWrapper)) {\n+            Command minecraftTarget = super.getCommand(\"minecraft:\" + name);\n+            if (minecraftTarget != null) {\n+                return minecraftTarget;\n+            }\n+        }\n+        return target;\n+    }\n+    // DivineMC end - Force Minecraft command\n }",
+      "touched_files": [],
+      "config_references": [
+        "DivineConfig.FixesCategory.forceMinecraftCommand"
+      ]
+    },
+    {
+      "path": "divinemc-server/paper-patches/files/src/main/java/org/bukkit/craftbukkit/CraftServer.java.patch",
+      "bytes": 459,
+      "header": "--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java\n+++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java\n@@ -914,7 +_,7 @@\n \n     @Override\n     public List<World> getWorlds() {\n-        return new ArrayList<World>(this.worlds.values());\n+        return new it.unimi.dsi.fastutil.objects.ObjectArrayList<World>(this.worlds.values()); // DivineMC - Replace CraftServer#getWorlds ArrayList with a fastutil ObjectArrayList\n     }\n \n     @Override",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/paper-patches/files/src/test/java/org/bukkit/craftbukkit/legacy/MaterialReroutingTest.java.patch",
+      "bytes": 935,
+      "header": "--- a/src/test/java/org/bukkit/craftbukkit/legacy/MaterialReroutingTest.java\n+++ b/src/test/java/org/bukkit/craftbukkit/legacy/MaterialReroutingTest.java\n@@ -59,6 +_,9 @@\n                 // Paper start - types that cannot be translated to ItemType/BlockType\n                 .filter(entry -> !entry.getName().equals(\"com/destroystokyo/paper/MaterialSetTag.class\"))\n                 // Paper end - types that cannot be translated to ItemType/BlockType\n+                // DivineMC start - third-party integration SDKs are not Bukkit API and must keep their descriptors stable\n+                .filter(entry -> !entry.getName().startsWith(\"dev/imanity/antixray/sdk/\"))\n+                // DivineMC end - third-party integration SDKs are not Bukkit API and must keep their descriptors stable\n                 .map(entry -> {\n                     try {\n                         return MaterialReroutingTest.jarFile.getInputStream(entry);",
+      "touched_files": [],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/purpur-patches/features/0001-Update-Purpur-rebrand-settings.patch",
+      "bytes": 1687,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Fri, 11 Jul 2025 20:26:35 +0300\nSubject: [PATCH] Update Purpur rebrand settings",
+      "touched_files": [
+        "src/main/java/org/purpurmc/purpur/PurpurConfig.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/purpur-patches/features/0002-Add-missing-purpur-config-options.patch",
+      "bytes": 10061,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 12 Jan 2025 00:14:21 +0300\nSubject: [PATCH] Add missing purpur config options",
+      "touched_files": [
+        "src/main/java/org/purpurmc/purpur/PurpurConfig.java",
+        "src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/purpur-patches/features/0003-Optimize-default-values-for-configs.patch",
+      "bytes": 1002,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 11 Jan 2025 23:22:12 +0300\nSubject: [PATCH] Optimize default values for configs",
+      "touched_files": [
+        "src/main/java/org/purpurmc/purpur/PurpurConfig.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/purpur-patches/features/0004-Configurable-movement-speed-for-entities.patch",
+      "bytes": 6349,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sun, 23 Mar 2025 01:23:42 +0300\nSubject: [PATCH] Configurable movement speed for entities",
+      "touched_files": [
+        "src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java"
+      ],
+      "config_references": []
+    },
+    {
+      "path": "divinemc-server/purpur-patches/features/0005-MSPT-Tracking-for-each-world.patch",
+      "bytes": 4040,
+      "header": "From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001\nFrom: NONPLAYT <nonplay@bxteam.org>\nDate: Sat, 8 Mar 2025 16:58:24 +0300\nSubject: [PATCH] MSPT Tracking for each world",
+      "touched_files": [
+        "src/main/java/org/purpurmc/purpur/task/TPSBarTask.java"
+      ],
+      "config_references": [
+        "DivineConfig.AsyncCategory.enableParallelWorldTicking",
+        "DivineConfig.AsyncCategory.showTPSOfServerInsteadOfWorld",
+        "DivineConfig.AsyncCategory.usePerWorldTpsBar"
+      ]
+    }
+  ]
+}
