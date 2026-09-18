@@ -91,3 +91,14 @@ over 1000 mutations and checks replacement/shared/zero-count stacks.
 live Paper state mutation, unload/reattach, stale owner rejection and native
 mid-tick/removal cadence. Equipment regression is rerun with the shared publishers.
 Full survival mechanics and plugin/load acceptance are still pending.
+
+## Observability extensions - 2026-09-18
+
+0042 records native per-world tick duration, idle/active block-entity counts,
+Moonrise chunk/entity/POI IO work and autosave queue age without changing tick,
+save or ticket order. 0009 adds bounded owner-thread sampling around synchronous
+plugin tasks, registered event listeners and Bukkit plugin commands. It keeps
+inclusive and exclusive time separate for nested hooks and stores only bounded
+names/numbers. Both features are diagnostic and default OFF where sampling or
+world histories add overhead. They do not cover async/direct NMS/native
+Brigadier work or establish a performance gain.

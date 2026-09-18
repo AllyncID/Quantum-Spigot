@@ -22,7 +22,7 @@ import org.bukkit.permissions.PermissionDefault;
 import static dev.quantumspigot.server.commands.QuantumMessages.*;
 
 public final class QuantumCommand extends Command {
-    private static final List<String> SUBCOMMANDS = List.of("help", "version", "tps", "mspt", "health", "threads", "chunks", "entities", "plugins", "profile", "config", "gc");
+    private static final List<String> SUBCOMMANDS = List.of("help", "version", "tps", "mspt", "worlds", "health", "threads", "chunks", "entities", "plugins", "profile", "config", "gc");
     private final Server server;
     private final QuantumRuntime runtime;
 
@@ -78,6 +78,19 @@ public final class QuantumCommand extends Command {
                 this.profile(sender);
             }
             case "tps" -> { this.tps(sender); this.mspt(sender, 60); }
+            case "worlds" -> {
+                if (!this.runtime.config().diagnostics().enabled() || !this.runtime.config().diagnostics().worldTimings()) {
+                    this.line(sender, note("Enable diagnostics.world-timings and restart to measure world ticks."));
+                } else for (var world : this.server.getWorlds()) {
+                    var history = ((CraftWorld) world).getHandle().quantumTickHistory;
+                    if (history == null) continue;
+                    var sample = history.snapshot(System.nanoTime(), 60);
+                    this.line(sender, pair(world.getKey().asString(), "avg " + decimal(sample.average()) + " | p95 " + decimal(sample.p95())
+                        + " | p99 " + decimal(sample.p99()) + " | max " + decimal(sample.max()) + " ms"));
+                    this.line(sender, note(sample.samples() + " world ticks; " + decimal(sample.coverageSeconds()) + "s coverage"));
+                }
+                this.line(sender, note("World tick wall time only; excludes global scheduler/network. Do not sum world percentiles."));
+            }
             case "mspt" -> {
                 if (args.length > 1 && args[1].equalsIgnoreCase("histogram")) this.histogram(sender);
                 else for (int seconds : new int[] {60, 300, 900}) this.mspt(sender, seconds);
@@ -120,13 +133,20 @@ public final class QuantumCommand extends Command {
                     this.line(sender, pair("Waiting send", q.waitingSend()).append(separator()).append(pair("Waiting ticking", q.waitingTicking())));
                     this.line(sender, note("Last tick; entries across " + q.sampledPlayers() + " players, not unique chunks."));
                 } else this.line(sender, warning("Queue measurements unavailable: diagnostics disabled."));
-                this.line(sender, note("Global IO/save queue lengths are not measured."));
+                for (var world : this.server.getWorlds()) {
+                    var work = QuantumRuntime.storageWork((CraftWorld) world);
+                    this.line(sender, pair(world.getKey().asString() + " IO tasks chunk/entity/POI", work.chunkTasks() + "/" + work.entityTasks() + "/" + work.poiTasks()));
+                    this.line(sender, pair("Autosave scheduled / oldest age", work.autosaveScheduledChunks() + " / " + work.oldestAutosaveAgeTicks() + " ticks"));
+                }
+                this.line(sender, note("Native IO includes reads/writes in flight. Autosave entries include clean chunks; age is scheduling time, not dirty-data durability."));
             }
             case "entities" -> {
                 this.line(sender, pair("Loaded entities", this.runtime.counts().loadedEntities()));
                 this.line(sender, pair("Active ticks", this.measured(this.runtime.lastEntityTicks())).append(separator())
                     .append(pair("Inactive ticks", this.measured(this.runtime.lastInactiveEntityTicks()))));
                 this.line(sender, note("Last-tick invocations, not unique entities or category timings."));
+                this.line(sender, pair("Block entity ticks", this.measured(this.runtime.lastBlockEntityTicks())).append(separator())
+                    .append(pair("Sleeping eligible tickers", this.measured(this.runtime.lastSleepingBlockEntities()))));
             }
             case "plugins" -> {
                 var stalls = this.runtime.stalls();
@@ -137,6 +157,18 @@ public final class QuantumCommand extends Command {
                     this.line(sender, note(stall.taskClass()));
                 });
                 this.line(sender, note("Last 10 incidents; this is not a plugin compatibility verdict."));
+                var work = this.runtime.pluginWork();
+                if (work == null) this.line(sender, note("Sampled event/command/task attribution disabled in quantum-diagnostics.yml."));
+                else {
+                    this.line(sender, pair("Sampled roots / observed roots", work.sampledRoots() + " / " + work.roots()));
+                    for (var sample : work.top(10)) {
+                        this.line(sender, pair(sample.key().plugin() + " " + sample.key().kind(), "self " + decimal(sample.exclusiveMs())
+                            + " | inclusive " + decimal(sample.inclusiveMs()) + " ms (" + sample.samples() + " samples)"));
+                        this.line(sender, note(sample.key().operation() + " | recent p95 " + decimal(sample.recentP95Ms()) + " ms / " + sample.recentSamples() + " samples"));
+                    }
+                    this.line(sender, pair("Groups / dropped groups / depth overflow", work.groupCount() + " / " + work.droppedGroups() + " / " + work.depthOverflows()));
+                    this.line(sender, note("Sampled totals since startup; self excludes nested covered hooks. No extrapolation. Async/direct NMS and native Brigadier plugin commands are outside coverage."));
+                }
             }
             case "profile" -> this.profile(sender);
             case "config" -> this.configuration(sender);

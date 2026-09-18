@@ -142,3 +142,20 @@ Both settings require performance `enabled: true` and restart; safe/compatibilit
 mode disables them. Rollback is disable-and-restart with unchanged world format.
 Focused correctness checks pass; full machine/farm, plugin and load acceptance
 remains pending.
+
+Diagnostics can optionally split the existing measurements without changing
+gameplay:
+
+* `diagnostics.world-timings: false` records bounded per-world tick history and
+  exposes it through `/quantum worlds`. It is wall time for the world loop only;
+  do not add percentiles from multiple worlds as if they were one tick.
+* `diagnostics.plugin-attribution.enabled: false` samples synchronous Bukkit
+  task, registered listener and Bukkit plugin-command hooks. The default
+  `sample-every: 16` is one in sixteen root hook trees. Each tree keeps at most
+  64 recent samples and 1024 groups. `/quantum plugins` shows inclusive and
+  exclusive sampled time; it does not extrapolate samples or cover async tasks,
+  direct NMS calls, or native Brigadier commands.
+
+`/quantum chunks` also reports native Moonrise chunk/entity/POI IO work and the
+  autosave scheduling queue. These are in-flight/scheduling counters, not a
+  durability guarantee or a replacement for save/restart testing.

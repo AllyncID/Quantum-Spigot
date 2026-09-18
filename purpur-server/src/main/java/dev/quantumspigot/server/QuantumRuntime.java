@@ -6,6 +6,7 @@ import dev.quantumspigot.server.config.QuantumTuning;
 import dev.quantumspigot.server.diagnostics.DiagnosticExecutor;
 import dev.quantumspigot.server.diagnostics.LagSpikeRecorder;
 import dev.quantumspigot.server.metrics.TickHistory;
+import dev.quantumspigot.server.metrics.PluginWorkTracker;
 import dev.quantumspigot.server.threading.WorkerBudget;
 import dev.quantumspigot.server.threading.AsyncChunkSerializer;
 import java.io.IOException;
@@ -35,6 +36,7 @@ public final class QuantumRuntime {
     private final LagSpikeRecorder lag;
     private final DiagnosticExecutor reports;
     private final AsyncChunkSerializer chunkSerializer;
+    private final PluginWorkTracker pluginWork;
     private final ArrayDeque<PluginStall> stalls = new ArrayDeque<>();
     private long pluginStalls;
     private long lastPluginWarning;
@@ -43,6 +45,7 @@ public final class QuantumRuntime {
     private long lastEntityTicks;
     private long inactiveEntityTicks;
     private long lastInactiveEntityTicks;
+    private long blockEntityTicks, sleepingBlockEntities, lastBlockEntityTicks, lastSleepingBlockEntities;
     private long chunksSent;
     private final long[] chunkQueues = new long[7];
     private final long[] lastChunkQueues = new long[7];
@@ -52,6 +55,8 @@ public final class QuantumRuntime {
         this.server = server;
         this.mainThread = Thread.currentThread();
         this.config = config;
+        this.pluginWork = config.diagnostics().enabled() && config.diagnostics().pluginAttribution()
+            ? new PluginWorkTracker(config.diagnostics().pluginSampleEvery()) : null;
         this.ticks = new TickHistory(config.diagnostics().historySeconds());
         this.lag = new LagSpikeRecorder(config.diagnostics().lagThresholdMs(), config.diagnostics().consecutiveTicks(),
             config.diagnostics().warningIntervalSeconds());
@@ -141,6 +146,9 @@ public final class QuantumRuntime {
         runtime.entityTicks = 0;
         runtime.lastInactiveEntityTicks = runtime.inactiveEntityTicks;
         runtime.inactiveEntityTicks = 0;
+        runtime.lastBlockEntityTicks = runtime.blockEntityTicks;
+        runtime.lastSleepingBlockEntities = runtime.sleepingBlockEntities;
+        runtime.blockEntityTicks = runtime.sleepingBlockEntities = 0;
         System.arraycopy(runtime.chunkQueues, 0, runtime.lastChunkQueues, 0, runtime.chunkQueues.length);
         java.util.Arrays.fill(runtime.chunkQueues, 0);
         if (runtime.lag.record(now, durationNanos / 1_000_000.0)) {
@@ -163,6 +171,43 @@ public final class QuantumRuntime {
             if (active) runtime.entityTicks++;
             else runtime.inactiveEntityTicks++;
         }
+    }
+
+    public static boolean diagnosticsEnabled() {
+        QuantumRuntime runtime = instance;
+        return runtime != null && runtime.config.diagnostics().enabled();
+    }
+
+    public static long startWorldTick() {
+        QuantumRuntime runtime = instance;
+        return runtime != null && runtime.config.diagnostics().enabled() && runtime.config.diagnostics().worldTimings()
+            ? System.nanoTime() : 0;
+    }
+
+    public static void recordWorldTick(net.minecraft.server.level.ServerLevel world, long durationNanos) {
+        QuantumRuntime runtime = instance;
+        if (runtime == null || !runtime.config.diagnostics().enabled() || !runtime.config.diagnostics().worldTimings()) return;
+        if (world.quantumTickHistory == null) world.quantumTickHistory = new TickHistory(runtime.config.diagnostics().historySeconds());
+        world.quantumTickHistory.record(System.nanoTime(), durationNanos);
+    }
+
+    public static void recordBlockEntityTicks(int active, int sleeping) {
+        QuantumRuntime runtime = instance;
+        if (runtime == null || !runtime.config.diagnostics().enabled()) return;
+        runtime.blockEntityTicks += active;
+        runtime.sleepingBlockEntities += sleeping;
+    }
+
+    public static int beginPluginWork(PluginWorkTracker.Kind kind, String plugin, String operation) {
+        QuantumRuntime runtime = instance;
+        return runtime == null || runtime.pluginWork == null || Thread.currentThread() != runtime.mainThread ? 0
+            : runtime.pluginWork.begin(kind, plugin, operation);
+    }
+
+    public static void endPluginWork(int token) {
+        if (token == 0) return;
+        QuantumRuntime runtime = instance;
+        if (runtime != null && runtime.pluginWork != null && Thread.currentThread() == runtime.mainThread) runtime.pluginWork.end(token);
     }
 
     public static void recordChunkSent() {
@@ -208,10 +253,13 @@ public final class QuantumRuntime {
     public DiagnosticExecutor.Snapshot worker() { return this.reports == null ? null : this.reports.snapshot(); }
     public AsyncChunkSerializer.Snapshot chunkSerializer() { return this.chunkSerializer == null ? null : this.chunkSerializer.snapshot(); }
     public List<PluginStall> stalls() { return List.copyOf(this.stalls); }
+    public PluginWorkTracker pluginWork() { return this.pluginWork; }
     public long pluginStalls() { return this.pluginStalls; }
     public long lagIncidents() { return this.lag.total(); }
     public long lastEntityTicks() { return this.lastEntityTicks; }
     public long lastInactiveEntityTicks() { return this.lastInactiveEntityTicks; }
+    public long lastBlockEntityTicks() { return this.lastBlockEntityTicks; }
+    public long lastSleepingBlockEntities() { return this.lastSleepingBlockEntities; }
     public long chunksSent() { return this.chunksSent; }
     public ChunkQueues chunkQueues() {
         long[] q = this.lastChunkQueues;
@@ -229,6 +277,16 @@ public final class QuantumRuntime {
         return new Counts(this.server.getOnlinePlayers().size(), chunks, entities);
     }
 
+    /** Query existing native counters; these include reads/writes in flight, not just queued saves. */
+    public static StorageWork storageWork(org.bukkit.craftbukkit.CraftWorld world) {
+        var level = world.getHandle();
+        var manager = level.moonrise$getChunkTaskScheduler().chunkHolderManager;
+        return new StorageWork(level.moonrise$getChunkDataController().getTotalWorkingTasks(),
+            level.moonrise$getEntityChunkDataController().getTotalWorkingTasks(),
+            level.moonrise$getPoiChunkDataController().getTotalWorkingTasks(),
+            manager.quantumAutosaveScheduledChunks(), manager.quantumOldestAutosaveAgeTicks());
+    }
+
     private String lagReport(long now) {
         StringBuilder text = new StringBuilder("QuantumSpigot lag incident\n");
         text.append("timestamp=").append(Instant.now()).append('\n');
@@ -240,7 +298,18 @@ public final class QuantumRuntime {
             .append(" inactiveEntityTicksLastTick=").append(this.lastInactiveEntityTicks).append('\n');
         text.append("chunkPacketsSentSinceStart=").append(this.chunksSent).append('\n');
         text.append("playerChunkQueueEntriesLastTick=").append(this.chunkQueues()).append('\n');
-        text.append("globalChunkIOAndSaveQueues=unavailable\n");
+        text.append("blockEntityTicksLastTick=").append(this.lastBlockEntityTicks)
+            .append(" sleepingBlockEntitiesLastTick=").append(this.lastSleepingBlockEntities).append('\n');
+        for (World world : this.server.getWorlds()) {
+            var craftWorld = (org.bukkit.craftbukkit.CraftWorld) world;
+            text.append("storageWork=").append(world.getKey()).append(' ').append(storageWork(craftWorld)).append('\n');
+            var history = craftWorld.getHandle().quantumTickHistory;
+            if (history != null) text.append("worldTick60s=").append(world.getKey()).append(' ').append(history.snapshot(now, 60)).append('\n');
+        }
+        if (this.pluginWork != null) {
+            text.append("sampledPluginRoots=").append(this.pluginWork.sampledRoots()).append('/').append(this.pluginWork.roots()).append('\n');
+            for (var work : this.pluginWork.top(20)) text.append("sampledPluginWork=").append(work).append('\n');
+        }
         text.append("worker=").append(this.worker()).append('\n');
         text.append("chunkSerializer=").append(this.chunkSerializer()).append('\n');
         text.append("heap=").append(ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()).append('\n');
@@ -275,6 +344,8 @@ public final class QuantumRuntime {
     }
 
     public record Counts(int players, int loadedChunks, int loadedEntities) {}
+    public record StorageWork(long chunkTasks, long entityTasks, long poiTasks,
+                              int autosaveScheduledChunks, long oldestAutosaveAgeTicks) {}
     public record ChunkQueues(long sampledPlayers, long waitingLoad, long loading, long waitingGeneration,
                               long generating, long waitingSend, long waitingTicking) {}
     public record PluginStall(long monotonicNanos, String plugin, int taskId, String taskClass, double durationMs) {}

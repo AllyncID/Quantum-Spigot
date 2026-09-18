@@ -24,6 +24,13 @@ the affected connection through an owner-thread task rather than publishing a
 partial packet. Shutdown drains for five seconds and reports abandoned jobs.
 This pipeline does not parallelize world access or client chunk application.
 
+Optional per-world timing and plugin attribution are observations on the owner
+thread. Event trees retain inclusive and exclusive durations with bounded
+groups/recent samples; sampled output is diagnostic evidence, not a total-time
+estimate. Async plugin work, direct NMS calls and native Brigadier commands are
+outside that hook coverage. Storage counters read Moonrise's existing atomic
+in-flight task counters and autosave queue; they do not add a save worker.
+
 Tracked inventories and block-entity sleep/wake hooks run on the owner thread.
 Sleeping retains native ticker order, removal checks and mid-tick task cadence.
 Workers never mutate an inventory, wake a machine or dispatch a plugin event.

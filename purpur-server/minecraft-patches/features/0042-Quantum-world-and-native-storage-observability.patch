@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 10:00:00 +0800
+Subject: [PATCH] Observe world ticks, idle block entities and native autosave scheduling
+
+Original Quantum instrumentation on the pinned Paper/Purpur base.
+Owner-thread observations only; no task/event ordering or save scheduling changes.
+Existing upstream notices remain applicable.
+
+diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java
+index e418820..3f8c52b 100644
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java
+@@ -238,2 +238,8 @@ public final class ChunkHolderManager {
+ 
++    // Quantum - inspect native autosave scheduling without scanning holders or changing save order.
++    public int quantumAutosaveScheduledChunks() { return this.autoSaveQueue.size(); }
++    public long quantumOldestAutosaveAgeTicks() {
++        return this.autoSaveQueue.isEmpty() ? 0L : Math.max(0L, this.currentTick - this.autoSaveQueue.first().lastAutoSave);
++    }
++
+     public void autoSave() {
+diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
+index 230406a..7f833a3 100644
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -1861,2 +1861,3 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+ 
++            long quantumWorldStart = dev.quantumspigot.server.QuantumRuntime.startWorldTick();
+             try {
+@@ -1867,2 +1868,4 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+                 throw new ReportedException(report);
++            } finally {
++                if (quantumWorldStart != 0) dev.quantumspigot.server.QuantumRuntime.recordWorldTick(level, System.nanoTime() - quantumWorldStart);
+             }
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index 5ec2332..77a001c 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -185,2 +185,3 @@ import org.slf4j.Logger;
+ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGetter, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevelReader, ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel { // Paper - rewrite chunk system // Paper - chunk tick iteration
++    public dev.quantumspigot.server.metrics.@Nullable TickHistory quantumTickHistory; // Quantum - owned by this world; released with it
+     public static final BlockPos END_SPAWN_POINT = new BlockPos(100, 50, 0);
+diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
+index 6847f7a..33db3cb 100644
+--- a/net/minecraft/world/level/Level.java
++++ b/net/minecraft/world/level/Level.java
+@@ -1537,2 +1537,3 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+     public void tickBlockEntities() {
++        int quantumSleeping = 0;
+         this.tickingBlockEntities = true;
+@@ -1556,3 +1557,4 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+             } else if (tickBlockEntities && this.shouldTickBlocksAt(ticker.getPos())) {
+-                if (!ticker.quantumIsSleeping()) ticker.tick(); // Quantum - keep native ticker ordering and mid-tick scheduling
++                if (ticker.quantumIsSleeping()) quantumSleeping++;
++                else ticker.tick(); // Quantum - keep native ticker ordering and mid-tick scheduling
+                 // Paper start - rewrite chunk system
+@@ -1567,2 +1569,3 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+         this.tickingBlockEntities = false;
++        dev.quantumspigot.server.QuantumRuntime.recordBlockEntityTicks(tickedEntities - quantumSleeping, quantumSleeping);
+     }

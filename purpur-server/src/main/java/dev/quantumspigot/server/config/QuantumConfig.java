@@ -23,7 +23,8 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
 
     public record Diagnostics(boolean enabled, int historySeconds, double lagThresholdMs, int consecutiveTicks,
                               double pluginThresholdMs, int warningIntervalSeconds, boolean saveReports,
-                              int reportQueueCapacity, int retainedReports) {}
+                              int reportQueueCapacity, int retainedReports, boolean worldTimings,
+                              boolean pluginAttribution, int pluginSampleEvery) {}
 
     public record Workers(int mainReserve, int jvmReserve, int maximumTotal) {}
 
@@ -110,7 +111,10 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                 diagnostics.integer("diagnostics.warning-interval-seconds", 30, 1, 3600, "Minimum interval between repeated warnings and lag reports."),
                 diagnostics.bool("diagnostics.save-reports", true, "Write bounded text reports under quantum-reports/lag-spikes."),
                 diagnostics.integer("diagnostics.report-queue-capacity", 16, 1, 256, "Bounded IO queue. Overflow drops diagnostics, never blocks the tick."),
-                diagnostics.integer("diagnostics.retained-reports", 64, 1, 1024, "Maximum Quantum lag reports retained on disk.")),
+                diagnostics.integer("diagnostics.retained-reports", 64, 1, 1024, "Maximum Quantum lag reports retained on disk."),
+                diagnostics.bool("diagnostics.world-timings", false, "Opt-in owner-thread world tick durations. Excludes global scheduler/network work; restart required."),
+                diagnostics.bool("diagnostics.plugin-attribution.enabled", false, "Opt-in synchronous task, registered event listener and Bukkit command timing. Bounded 1024 groups; does not move or delay plugin work."),
+                diagnostics.integer("diagnostics.plugin-attribution.sample-every", 16, 1, 1024, "Sample one in N outer hook calls, including its nested hooks. Percentiles cover the last 64 sampled calls per group, not all server ticks.")),
             new Workers(
                 threading.integer("threading.main-reserve", 2, 0, 1024, "Logical processors reserved when planning Quantum workers."),
                 threading.integer("threading.jvm-reserve", 1, 0, 1024, "Additional reservation for JVM/GC work."),

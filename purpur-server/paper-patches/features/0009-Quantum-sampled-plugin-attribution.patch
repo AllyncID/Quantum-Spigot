@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 10:00:00 +0800
+Subject: [PATCH] Sample synchronous plugin tasks, event listeners and Bukkit commands
+
+Original Quantum instrumentation on the pinned Paper/Purpur base.
+Owner-thread observations only; no task/event ordering or save scheduling changes.
+Existing upstream notices remain applicable.
+
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
+index 5c52b1563..a07915507 100644
+--- a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
++++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
+@@ -82,3 +82,10 @@ public class BukkitCommandNode extends LiteralCommandNode<CommandSourceStack> {
+             // Note: we don't return the result of target.execute as thats success / failure, we return handled (true) or not handled (false)
+-            this.command.execute(sender, this.literal, Arrays.copyOfRange(args, 1, args.length));
++            int quantumWork = this.command instanceof org.bukkit.command.PluginIdentifiableCommand owned
++                ? dev.quantumspigot.server.QuantumRuntime.beginPluginWork(dev.quantumspigot.server.metrics.PluginWorkTracker.Kind.COMMAND,
++                    owned.getPlugin().getName(), this.command.getName()) : 0;
++            try {
++                this.command.execute(sender, this.literal, Arrays.copyOfRange(args, 1, args.length));
++            } finally {
++                dev.quantumspigot.server.QuantumRuntime.endPluginWork(quantumWork);
++            }
+ 
+diff --git a/src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java b/src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java
+index 2a298ec2c..8fad23df3 100644
+--- a/src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java
++++ b/src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java
+@@ -53,3 +53,10 @@ class PaperEventManager {
+             try {
+-                registration.callEvent(event);
++                int quantumWork = dev.quantumspigot.server.QuantumRuntime.beginPluginWork(
++                    dev.quantumspigot.server.metrics.PluginWorkTracker.Kind.EVENT,
++                    registration.getPlugin().getName(), event.getClass().getName());
++                try {
++                    registration.callEvent(event);
++                } finally {
++                    dev.quantumspigot.server.QuantumRuntime.endPluginWork(quantumWork);
++                }
+             } catch (AuthorNagException ex) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java b/src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java
+index 09c9e4806..060c211f5 100644
+--- a/src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java
++++ b/src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java
+@@ -474,3 +474,5 @@ public class CraftScheduler implements BukkitScheduler {
+                     // Quantum - measure only plugin execution, including throwing tasks.
+-                    final long quantumTaskStart = System.nanoTime();
++                    final long quantumTaskStart = dev.quantumspigot.server.QuantumRuntime.diagnosticsEnabled() ? System.nanoTime() : 0;
++                    final int quantumWork = dev.quantumspigot.server.QuantumRuntime.beginPluginWork(
++                        dev.quantumspigot.server.metrics.PluginWorkTracker.Kind.TASK, task.getOwner().getName(), task.getTaskClass().getName());
+                     try {
+@@ -478,5 +480,8 @@ public class CraftScheduler implements BukkitScheduler {
+                     } finally {
+-                        final long quantumTaskDuration = System.nanoTime() - quantumTaskStart;
+-                        dev.quantumspigot.server.QuantumRuntime.recordPluginTask(
+-                            task.getOwner().getName(), task.getTaskId(), task.getTaskClass().getName(), quantumTaskDuration);
++                        dev.quantumspigot.server.QuantumRuntime.endPluginWork(quantumWork);
++                        if (quantumTaskStart != 0) {
++                            final long quantumTaskDuration = System.nanoTime() - quantumTaskStart;
++                            dev.quantumspigot.server.QuantumRuntime.recordPluginTask(
++                                task.getOwner().getName(), task.getTaskId(), task.getTaskClass().getName(), quantumTaskDuration);
++                        }
+                     }

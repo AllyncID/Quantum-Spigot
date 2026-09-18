@@ -15,6 +15,9 @@ class QuantumConfigTest {
         var config = QuantumConfig.load(this.directory, true);
         assertEquals(QuantumConfig.Profile.COMPATIBILITY, config.profile());
         assertEquals(900, config.diagnostics().historySeconds());
+        assertFalse(config.diagnostics().worldTimings());
+        assertFalse(config.diagnostics().pluginAttribution());
+        assertEquals(16, config.diagnostics().pluginSampleEvery());
         assertTrue(config.coloredCommands());
         assertFalse(config.performanceActive());
         assertEquals(QuantumConfig.Algorithms.DISABLED, config.algorithms());
@@ -51,6 +54,20 @@ class QuantumConfigTest {
         Files.delete(threading);
         Files.writeString(this.directory.resolve("quantum-diagnostics.yml"), "diagnostics:\n  plugin-task-threshold-ms: .NaN\n");
         assertThrows(InvalidConfigurationException.class, () -> QuantumConfig.load(this.directory, false));
+    }
+
+    @Test
+    void validatesOptionalWorldAndPluginAttributionSettings() throws Exception {
+        Path file = this.directory.resolve("quantum-diagnostics.yml");
+        Files.writeString(file, "diagnostics:\n  world-timings: true\n  plugin-attribution:\n    enabled: true\n    sample-every: 1\n");
+        var config = QuantumConfig.load(this.directory, false).diagnostics();
+        assertTrue(config.worldTimings());
+        assertTrue(config.pluginAttribution());
+        assertEquals(1, config.pluginSampleEvery());
+        for (String invalid : new String[] {"0", "1025", "false", "1.5"}) {
+            Files.writeString(file, "diagnostics:\n  plugin-attribution:\n    sample-every: " + invalid + "\n");
+            assertThrows(InvalidConfigurationException.class, () -> QuantumConfig.load(this.directory, false));
+        }
     }
 
     @Test
