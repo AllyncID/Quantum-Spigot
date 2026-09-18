@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 21:10:00 +0800
+Subject: [PATCH] Reuse locator connection rows during reconciliation
+
+The locator bar keeps one connection per receiver/transmitter pair. Reuse
+the already selected row instead of looking it up once for every waypoint.
+This preserves connection ordering and all vanilla visibility/retry behavior.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/minecraft/server/waypoints/ServerWaypointManager.java
+--- a/net/minecraft/server/waypoints/ServerWaypointManager.java
++++ b/net/minecraft/server/waypoints/ServerWaypointManager.java
+@@ -105,13 +105,16 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+             }
+             if (hasBroken) {
+                 for (var entry : new java.util.ArrayList<>(row.entrySet())) {
+                     this.updateConnection(player, entry.getKey(), entry.getValue());
+                 }
+             } else {
+                 for (var entry : row.entrySet()) {
+                     entry.getValue().update();
+                 }
+             }
+-            for (WaypointTransmitter waypoint : this.waypoints) {
+-                var quantumRow = this.quantumConnectionRows.get(player);
+-                if (quantumRow == null || !quantumRow.containsKey(waypoint)) this.createConnection(player, waypoint);
++            for (WaypointTransmitter waypoint : this.waypoints) {
++                if (!row.containsKey(waypoint)) this.createConnection(player, waypoint);
+             }
+             return;
+         }
