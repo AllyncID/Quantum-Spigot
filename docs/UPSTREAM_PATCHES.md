@@ -67,3 +67,27 @@ checks. The follow-up equipment stack-resurrection and wrong-slot unsubscription
 No end-to-end performance or plugin-capacity acceptance is implied.
 License texts and this provenance file are included in the server jar under
 `META-INF/licenses/quantum-ports` when packaged.
+
+## Inventory revisions and idle machines - 2026-09-18
+
+Native 0040 and 0041 are Quantum implementations after auditing Divine M0064
+at the same pinned commit above. They reuse the Lithium mutation publishers
+attributed to 2No2Name (LGPL-3.0) in 0030; they do not import the complete Divine
+sleeping-hopper suite. `TrackedItemList` shares fixed-size inventory revision
+tracking between cached hopper classification and machine wake-up. Mutation
+publishers now activate based on subscription, independently of equipment's flag.
+The post-enchantment callback is issued after the component mutation.
+
+0041 keeps native ticker ordering/removal/mid-tick scheduling and verifies the
+wrapper's current owner before sleep/wake. Admission is limited to idle native
+furnaces, brewing stands, campfires and crafters. Paper 0008 wakes live BlockState
+access because its timer setters can mutate native fields without an NBT load.
+Native menu timer setters wake too. Both options default OFF. No plugin event
+result, hopper transfer or cooldown is skipped by these patches.
+
+`HopperInventoryCacheTest` compares classification with the native algorithm
+over 1000 mutations and checks replacement/shared/zero-count stacks.
+`BlockEntitySleepTest` covers idle admission, inventory/state/timer wake-up,
+live Paper state mutation, unload/reattach, stale owner rejection and native
+mid-tick/removal cadence. Equipment regression is rerun with the shared publishers.
+Full survival mechanics and plugin/load acceptance are still pending.

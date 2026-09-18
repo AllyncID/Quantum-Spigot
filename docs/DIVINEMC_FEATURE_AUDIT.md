@@ -110,7 +110,7 @@ subsequent implementation, not a performance acceptance or completion of all row
 | Noise kernel and bury math | 0033-0034, default OFF | Random-coordinate bit parity check passes; complete generated-world comparison pending |
 | End biome cache | 0035, default OFF, bounded, native density only | Seed isolation, native Y-independence, custom Y-dependent bypass and capacity checks pass |
 | Async chunk serialization | 0036, default OFF | Snapshot, bounded admission, disconnect and failure checks pass; network/plugin/load validation pending |
-| Sleeping hoppers/block entities | Item mutation prerequisite only | Sleep/wake and inventory invalidation implementation remains pending |
+| Sleeping hoppers/block entities | 0040 revision-tracked native hopper classification; 0041 idle furnace/brewer/campfire/crafter sleep, Paper 0008 live-state wake-up; default OFF | Focused mutation, sleep/wake, unload/rebind and ticker-cadence checks pass. Sleeping hoppers, failed-transfer cache, full farm/plugin/load acceptance remain pending |
 | Login ProfileResult cache | REJECT M0037 as written | Username-only reuse skips a new session-digest/IP verification. Keep native authentication on every connection |
 | Command parse cache | M0036 needs rewrite | Retains an old source/callback and dispatcher; permissions and source lifecycle cannot be cached indiscriminately |
 

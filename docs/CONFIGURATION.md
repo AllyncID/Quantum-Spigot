@@ -119,3 +119,26 @@ counts. These measure serialization submission, not client chunk readiness.
 Experimental performance benefits and combined plugin behavior remain unverified.
 
 Additional default-OFF keys: `experimental.network.visibility-lookup`, `experimental.network.unchanged-movement`, `experimental.network.lazy-flush`, and `experimental.mechanics.live-collision-context`. The last option changes entity-context sampling from captured to current state; explicit placement/position contexts are preserved.
+
+`experimental.mechanics.hopper-inventory-cache` (false) tracks native hopper
+slot/count/component revisions to reuse the empty/full classification. Inventory
+replacement detaches old listeners; retained zero-count stacks are rechecked.
+Transfer attempts, cooldowns, inventory lookup and plugin events remain native.
+This setting does not yet implement sleeping hoppers or cache failed transfers.
+
+`experimental.mechanics.sleeping-block-entities` (false) suspends native furnaces
+(including blast furnaces/smokers), brewing stands, campfires and crafters only
+in idle states without timer or retry work. Inventory mutations, native menu
+timer setters, NBT loads, block-state changes and live Paper BlockState access
+wake them. Detached Bukkit snapshots wake the placed machine when applied by
+the native update/load path. Live-state reads conservatively wake too. Unloading
+detaches inventory subscriptions; reattachment and ticker rebinding clear sleep.
+Custom subclasses retain the native path. Arbitrary direct NMS field/array writes
+outside these hooks require `quantumWake()` and are not covered by a universal
+plugin compatibility claim. Failed/cancelled recipe or fuel attempts are not
+cached. Retained noncanonical empty stacks prevent sleep until subscribed again.
+
+Both settings require performance `enabled: true` and restart; safe/compatibility
+mode disables them. Rollback is disable-and-restart with unchanged world format.
+Focused correctness checks pass; full machine/farm, plugin and load acceptance
+remains pending.

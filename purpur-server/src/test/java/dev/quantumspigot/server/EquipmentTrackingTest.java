@@ -17,7 +17,7 @@ class EquipmentTrackingTest {
     @Test
     void countComponentReplacementAndClearKeepSubscriptionsCorrect() {
         try (var runtime = mockStatic(QuantumRuntime.class)) {
-            runtime.when(QuantumRuntime::mechanics).thenReturn(new QuantumConfig.Mechanics(true, false, false));
+            runtime.when(QuantumRuntime::mechanics).thenReturn(new QuantumConfig.Mechanics(true, false, false, false, false));
             var equipment = new EntityEquipment();
             var stack = new ItemStack(Items.STONE, 10);
             equipment.set(EquipmentSlot.MAINHAND, stack);

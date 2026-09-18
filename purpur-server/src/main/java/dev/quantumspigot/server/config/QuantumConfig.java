@@ -64,8 +64,8 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
     public Worldgen worldgen() {
         return this.performanceActive() ? this.performance.worldgen() : Worldgen.DISABLED;
     }
-    public record Mechanics(boolean equipmentTracking, boolean recipeLookup, boolean liveCollisionContext) {
-        public static final Mechanics DISABLED = new Mechanics(false, false, false);
+    public record Mechanics(boolean equipmentTracking, boolean recipeLookup, boolean liveCollisionContext, boolean hopperInventoryCache, boolean sleepingBlockEntities) {
+        public static final Mechanics DISABLED = new Mechanics(false, false, false, false, false);
     }
 
     public Mechanics mechanics() {
@@ -153,7 +153,9 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
         Mechanics mechanics = new Mechanics(
             doc.bool("experimental.mechanics.equipment-tracking", false, "EXPERIMENTAL: track ItemStack/component mutations before equipment scans. Owner-thread gameplay remains synchronous."),
             doc.bool("experimental.mechanics.recipe-lookup", false, "EXPERIMENTAL: collect matching recipes without a stream; preserves last-match priority and matcher order."),
-            doc.bool("experimental.mechanics.live-collision-context", false, "EXPERIMENTAL BEHAVIOR: entity contexts read current movement/held item instead of capturing them. Explicit placement/position contexts retain captured values."));
+            doc.bool("experimental.mechanics.live-collision-context", false, "EXPERIMENTAL BEHAVIOR: entity contexts read current movement/held item instead of capturing them. Explicit placement/position contexts retain captured values."),
+            doc.bool("experimental.mechanics.hopper-inventory-cache", false, "EXPERIMENTAL: revision-tracked native hopper slots cache empty/full classification. Transfer attempts, plugin events, comparator updates and cooldowns stay native."),
+            doc.bool("experimental.mechanics.sleeping-block-entities", false, "EXPERIMENTAL: sleep proven-idle native furnaces, brewing stands, campfires and crafters. Inventory/NBT/state changes wake them; active machines and cancellable retry work remain native."));
         Worldgen worldgen = new Worldgen(
             doc.integer("experimental.worldgen.end-biome-cache-entries", 0, 0, 65536, "0 OFF. Per-thread/source bounded cache for native End-island density only; custom samplers use upstream."),
             doc.bool("experimental.worldgen.noise-kernel", false, "EXPERIMENTAL: C2ME flattened gradient kernel; preserve upstream coordinate rounding and derivative path."),

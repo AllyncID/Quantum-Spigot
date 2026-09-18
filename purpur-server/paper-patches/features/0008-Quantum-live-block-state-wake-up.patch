@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 10:00:00 +0800
+Subject: [PATCH] Wake machines accessed through live Paper block states
+
+Conservative wake-up for snapshot-disabled BlockState access, including timer
+setters that mutate native fields directly. Ordinary detached snapshots stay
+separate until native update/load applies them. Depends on Minecraft 0041.
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
+index 1ef1943c9..a4ce46de5 100644
+--- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
++++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
+@@ -124,4 +124,5 @@ public abstract class CraftBlockEntityState<T extends BlockEntity> extends Craft
+     // gets the cloned BlockEntity which is used to store the captured data
+     protected T getSnapshot() {
++        if (this.snapshotDisabled && this.snapshot != null) this.snapshot.quantumWake(); // Quantum - live BlockState setters can mutate timers directly
+         return this.snapshot;
+     }

@@ -123,7 +123,7 @@ class LookupAndNetworkPortsTest {
         try (var runtime = mockStatic(QuantumRuntime.class)) {
             runtime.when(QuantumRuntime::mechanics).thenReturn(QuantumConfig.Mechanics.DISABLED);
             var snapshot = CollisionContext.of(entity);
-            runtime.when(QuantumRuntime::mechanics).thenReturn(new QuantumConfig.Mechanics(false, false, true));
+            runtime.when(QuantumRuntime::mechanics).thenReturn(new QuantumConfig.Mechanics(false, false, true, false, false));
             var live = CollisionContext.of(entity);
             var explicit = CollisionContext.withPosition(entity, 5.0);
             when(entity.getMainHandItem()).thenReturn(new ItemStack(Items.DIAMOND));

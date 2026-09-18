@@ -1,0 +1,267 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 00:00:00 +0800
+Subject: [PATCH] Sleep proven-idle block entities with owner-checked wake-up
+
+Quantum implementation after auditing DivineMC M0064 at
+039981b0bf973ea9bee0f2521b2c01d9bb419802 (Lithium by 2No2Name, LGPL-3.0).
+Reuses the attributed mutation publishers from Quantum 0030. Keeps native
+transfer/event/cooldown paths; no cached plugin result or changed tick cadence.
+Sleep admission is deliberately limited to states with no timed or retry work.
+
+diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
+index 759efdd..6847f7a 100644
+--- a/net/minecraft/world/level/Level.java
++++ b/net/minecraft/world/level/Level.java
+@@ -1555,5 +1555,5 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+                 toRemove.add(ticker); // Paper - Fix MC-117075 use removeAll
+             } else if (tickBlockEntities && this.shouldTickBlocksAt(ticker.getPos())) {
+-                ticker.tick();
++                if (!ticker.quantumIsSleeping()) ticker.tick(); // Quantum - keep native ticker ordering and mid-tick scheduling
+                 // Paper start - rewrite chunk system
+                 if ((++tickedEntities & 7) == 0) {
+diff --git a/net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java b/net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java
+index 993e6aa..a30492c 100644
+--- a/net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java
+@@ -59,5 +59,5 @@ public abstract class AbstractFurnaceBlockEntity extends BaseContainerBlockEntit
+     private static final short DEFAULT_LIT_TIME_REMAINING = 0;
+     private static final short DEFAULT_LIT_TOTAL_TIME = 0;
+-    protected NonNullList<ItemStack> items = NonNullList.withSize(3, ItemStack.EMPTY);
++    protected NonNullList<ItemStack> items = this.quantumTrackInventory(NonNullList.withSize(3, ItemStack.EMPTY));
+     public int litTimeRemaining;
+     private int litTotalTime;
+@@ -83,4 +83,5 @@ public abstract class AbstractFurnaceBlockEntity extends BaseContainerBlockEntit
+         @Override
+         public void set(final int dataId, final int value) {
++            AbstractFurnaceBlockEntity.this.quantumWake();
+             switch (dataId) {
+                 case 0:
+@@ -154,5 +155,5 @@ public abstract class AbstractFurnaceBlockEntity extends BaseContainerBlockEntit
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
+-        this.items = NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY);
++        this.setItems(NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY));
+         ContainerHelper.loadAllItems(input, this.items);
+         this.cookingTimer = input.getShortOr("cooking_time_spent", (short)0);
+@@ -287,4 +288,9 @@ public abstract class AbstractFurnaceBlockEntity extends BaseContainerBlockEntit
+ 
+         if (usedLavaFromUnderneath) entity.items.set(1, ItemStack.EMPTY); // Purpur - Furnace uses lava from underneath
++        // Quantum - no input, no burn and no cooling work. Failed/cancelled recipes continue ticking normally.
++        if (entity.litTimeRemaining <= 0 && entity.cookingTimer == 0 && entity.items.get(0).isEmpty()
++            && entity.items instanceof dev.quantumspigot.server.inventory.TrackedItemList tracked && tracked.canSleep()) {
++            entity.quantumSleep();
++        }
+     }
+ 
+@@ -403,5 +409,5 @@ public abstract class AbstractFurnaceBlockEntity extends BaseContainerBlockEntit
+     @Override
+     protected void setItems(final NonNullList<ItemStack> items) {
+-        this.items = items;
++        this.items = this.quantumTrackInventory(items);
+     }
+ 
+diff --git a/net/minecraft/world/level/block/entity/BlockEntity.java b/net/minecraft/world/level/block/entity/BlockEntity.java
+index d4453e8..d411890 100644
+--- a/net/minecraft/world/level/block/entity/BlockEntity.java
++++ b/net/minecraft/world/level/block/entity/BlockEntity.java
+@@ -40,4 +40,35 @@ import org.slf4j.Logger;
+ 
+ public abstract class BlockEntity implements DebugValueSource, TypedInstance<BlockEntityType<?>> {
++    private net.minecraft.world.level.chunk.LevelChunk.@Nullable RebindableTickingBlockEntityWrapper quantumTickWrapper;
++    private dev.quantumspigot.server.inventory.@Nullable TrackedItemList quantumSleepInventory;
++
++    public void quantumSetTickWrapper(net.minecraft.world.level.chunk.LevelChunk.@Nullable RebindableTickingBlockEntityWrapper wrapper) {
++        this.quantumTickWrapper = wrapper;
++    }
++
++    public void quantumWake() {
++        if (this.quantumTickWrapper != null) this.quantumTickWrapper.quantumSetSleeping(this, false);
++    }
++
++    protected void quantumSleep() {
++        if (this.quantumTickWrapper != null && !this.isRemoved()
++            && dev.quantumspigot.server.QuantumRuntime.mechanics().sleepingBlockEntities()) {
++            this.quantumTickWrapper.quantumSetSleeping(this, true);
++        }
++    }
++
++    protected net.minecraft.core.NonNullList<ItemStack> quantumTrackInventory(net.minecraft.core.NonNullList<ItemStack> contents) {
++        this.quantumWake();
++        if (this.quantumSleepInventory != null) this.quantumSleepInventory.detach();
++        this.quantumSleepInventory = null;
++        Class<?> type = this.getClass();
++        if (dev.quantumspigot.server.QuantumRuntime.mechanics().sleepingBlockEntities()
++            && (type == FurnaceBlockEntity.class || type == BlastFurnaceBlockEntity.class || type == SmokerBlockEntity.class
++                || type == BrewingStandBlockEntity.class || type == CampfireBlockEntity.class)) {
++            this.quantumSleepInventory = new dev.quantumspigot.server.inventory.TrackedItemList(contents, this::quantumWake);
++            return this.quantumSleepInventory;
++        }
++        return contents;
++    }
+     static boolean ignoreBlockEntityUpdates; // Paper - Perf: Optimize Hoppers
+     // CraftBukkit start - data containers
+@@ -102,4 +133,5 @@ public abstract class BlockEntity implements DebugValueSource, TypedInstance<Blo
+ 
+     protected void loadAdditional(final ValueInput input) {
++        this.quantumWake();
+         // Paper start - read persistent data container
+         this.persistentDataContainer.clear(); // Paper - clear instead of init
+@@ -219,4 +251,5 @@ public abstract class BlockEntity implements DebugValueSource, TypedInstance<Blo
+ 
+     public void setChanged() {
++        this.quantumWake();
+         if (this.level != null) {
+             if (ignoreBlockEntityUpdates) return; // Paper - Perf: Optimize Hoppers
+@@ -253,8 +286,12 @@ public abstract class BlockEntity implements DebugValueSource, TypedInstance<Blo
+ 
+     public void setRemoved() {
++        this.quantumWake();
++        this.quantumTickWrapper = null;
++        if (this.quantumSleepInventory != null) this.quantumSleepInventory.detach();
+         this.remove = true;
+     }
+ 
+     public void clearRemoved() {
++        if (this.quantumSleepInventory != null) this.quantumSleepInventory.attach();
+         this.remove = false;
+     }
+@@ -298,4 +335,5 @@ public abstract class BlockEntity implements DebugValueSource, TypedInstance<Blo
+         this.validateBlockState(blockState);
+         this.blockState = blockState;
++        this.quantumWake();
+     }
+ 
+diff --git a/net/minecraft/world/level/block/entity/BrewingStandBlockEntity.java b/net/minecraft/world/level/block/entity/BrewingStandBlockEntity.java
+index 5d26efb..9607474 100644
+--- a/net/minecraft/world/level/block/entity/BrewingStandBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/BrewingStandBlockEntity.java
+@@ -41,5 +41,5 @@ public class BrewingStandBlockEntity extends BaseContainerBlockEntity implements
+     private static final byte DEFAULT_FUEL = 0;
+     private static final Component DEFAULT_NAME = Component.translatable("container.brewing");
+-    private NonNullList<ItemStack> items = NonNullList.withSize(5, ItemStack.EMPTY);
++    private NonNullList<ItemStack> items = this.quantumTrackInventory(NonNullList.withSize(5, ItemStack.EMPTY));
+     public int brewTime;
+     public int recipeBrewTime = 400; // Paper - Add recipeBrewTime
+@@ -60,4 +60,5 @@ public class BrewingStandBlockEntity extends BaseContainerBlockEntity implements
+         @Override
+         public void set(final int dataId, final int value) {
++            BrewingStandBlockEntity.this.quantumWake();
+             switch (dataId) {
+                 case 0:
+@@ -136,5 +137,5 @@ public class BrewingStandBlockEntity extends BaseContainerBlockEntity implements
+     @Override
+     protected void setItems(final NonNullList<ItemStack> items) {
+-        this.items = items;
++        this.items = this.quantumTrackInventory(items);
+     }
+ 
+@@ -201,4 +202,9 @@ public class BrewingStandBlockEntity extends BaseContainerBlockEntity implements
+             level.setBlock(pos, state, Block.UPDATE_CLIENTS);
+         }
++        // Quantum - never cache a failed brew or fuel event; only suspend a machine with neither pending ingredient nor fuel item.
++        if (entity.brewTime == 0 && entity.items.get(3).isEmpty() && entity.items.get(4).isEmpty()
++            && entity.items instanceof dev.quantumspigot.server.inventory.TrackedItemList tracked && tracked.canSleep()) {
++            entity.quantumSleep();
++        }
+     }
+ 
+@@ -284,5 +290,5 @@ public class BrewingStandBlockEntity extends BaseContainerBlockEntity implements
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
+-        this.items = NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY);
++        this.setItems(NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY));
+         ContainerHelper.loadAllItems(input, this.items);
+         this.brewTime = input.getShortOr("BrewTime", (short)0);
+diff --git a/net/minecraft/world/level/block/entity/CampfireBlockEntity.java b/net/minecraft/world/level/block/entity/CampfireBlockEntity.java
+index 64d0d60..ecf27b3 100644
+--- a/net/minecraft/world/level/block/entity/CampfireBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/CampfireBlockEntity.java
+@@ -44,5 +44,5 @@ public class CampfireBlockEntity extends BlockEntity implements Clearable {
+     private static final int BURN_COOL_SPEED = 2;
+     private static final int NUM_SLOTS = 4;
+-    private final NonNullList<ItemStack> items = NonNullList.withSize(4, ItemStack.EMPTY);
++    private final NonNullList<ItemStack> items = this.quantumTrackInventory(NonNullList.withSize(4, ItemStack.EMPTY));
+     public final int[] cookingProgress = new int[4];
+     public final int[] cookingTime = new int[4];
+@@ -112,4 +112,6 @@ public class CampfireBlockEntity extends BlockEntity implements Clearable {
+         if (changed) {
+             setChanged(level, pos, state);
++        } else if (entity.items instanceof dev.quantumspigot.server.inventory.TrackedItemList tracked && tracked.canSleep()) {
++            entity.quantumSleep();
+         }
+     }
+@@ -127,4 +129,6 @@ public class CampfireBlockEntity extends BlockEntity implements Clearable {
+         if (changed) {
+             setChanged(level, pos, state);
++        } else if (entity.items instanceof dev.quantumspigot.server.inventory.TrackedItemList tracked && tracked.canSleep()) {
++            entity.quantumSleep();
+         }
+     }
+diff --git a/net/minecraft/world/level/block/entity/CrafterBlockEntity.java b/net/minecraft/world/level/block/entity/CrafterBlockEntity.java
+index 02d86d0..9c78d77 100644
+--- a/net/minecraft/world/level/block/entity/CrafterBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/CrafterBlockEntity.java
+@@ -281,7 +281,9 @@ public class CrafterBlockEntity extends RandomizableContainerBlockEntity impleme
+             }
+         }
++        if (entity.craftingTicksRemaining <= 0 && entity.getClass() == CrafterBlockEntity.class) entity.quantumSleep();
+     }
+ 
+     public void setCraftingTicksRemaining(final int maxCraftingTicks) {
++        this.quantumWake();
+         this.craftingTicksRemaining = maxCraftingTicks;
+     }
+diff --git a/net/minecraft/world/level/block/entity/TickingBlockEntity.java b/net/minecraft/world/level/block/entity/TickingBlockEntity.java
+index 28e3b73..d831b00 100644
+--- a/net/minecraft/world/level/block/entity/TickingBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/TickingBlockEntity.java
+@@ -11,3 +11,5 @@ public interface TickingBlockEntity {
+ 
+     String getType();
++
++    default boolean quantumIsSleeping() { return false; }
+ }
+diff --git a/net/minecraft/world/level/chunk/LevelChunk.java b/net/minecraft/world/level/chunk/LevelChunk.java
+index eb4324d..e9a0573 100644
+--- a/net/minecraft/world/level/chunk/LevelChunk.java
++++ b/net/minecraft/world/level/chunk/LevelChunk.java
+@@ -919,5 +919,5 @@ public class LevelChunk extends ChunkAccess implements DebugValueSource, ca.spot
+             this.removeBlockEntityTicker(blockEntity.getBlockPos());
+         } else {
+-            this.tickersInLevel.compute(blockEntity.getBlockPos(), (blockPos, existingTicker) -> {
++            var quantumWrapper = this.tickersInLevel.compute(blockEntity.getBlockPos(), (blockPos, existingTicker) -> {
+                 TickingBlockEntity actualTicker = this.createTicker(blockEntity, ticker);
+                 if (existingTicker != null) {
+@@ -932,4 +932,5 @@ public class LevelChunk extends ChunkAccess implements DebugValueSource, ca.spot
+                 }
+             });
++            blockEntity.quantumSetTickWrapper(quantumWrapper);
+         }
+     }
+@@ -1022,6 +1023,7 @@ public class LevelChunk extends ChunkAccess implements DebugValueSource, ca.spot
+     }
+ 
+-    private static class RebindableTickingBlockEntityWrapper implements TickingBlockEntity {
++    public static class RebindableTickingBlockEntityWrapper implements TickingBlockEntity {
+         private TickingBlockEntity ticker;
++        private boolean quantumSleeping;
+ 
+         private RebindableTickingBlockEntityWrapper(final TickingBlockEntity ticker) {
+@@ -1031,6 +1033,16 @@ public class LevelChunk extends ChunkAccess implements DebugValueSource, ca.spot
+         private void rebind(final TickingBlockEntity ticker) {
+             this.ticker = ticker;
++            this.quantumSleeping = false;
+         }
+ 
++        public void quantumSetSleeping(BlockEntity owner, boolean sleeping) {
++            if (this.ticker instanceof LevelChunk.BoundTickingBlockEntity<?> bound && bound.blockEntity == owner) {
++                this.quantumSleeping = sleeping;
++            }
++        }
++
++        @Override
++        public boolean quantumIsSleeping() { return this.quantumSleeping; }
++
+         @Override
+         public void tick() {

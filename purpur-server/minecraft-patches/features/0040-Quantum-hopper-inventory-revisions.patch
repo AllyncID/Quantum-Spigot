@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 00:00:00 +0800
+Subject: [PATCH] Revision-tracked hopper inventory classification
+
+Quantum implementation after auditing DivineMC M0064 at
+039981b0bf973ea9bee0f2521b2c01d9bb419802 (Lithium by 2No2Name, LGPL-3.0).
+Reuses the attributed mutation publishers from Quantum 0030. Keeps native
+transfer/event/cooldown paths; no cached plugin result or changed tick cadence.
+Sleep admission is deliberately limited to states with no timed or retry work.
+
+diff --git a/net/minecraft/core/component/PatchedDataComponentMap.java b/net/minecraft/core/component/PatchedDataComponentMap.java
+index 3b37b30..5ff2b2b 100644
+--- a/net/minecraft/core/component/PatchedDataComponentMap.java
++++ b/net/minecraft/core/component/PatchedDataComponentMap.java
+@@ -138,5 +138,5 @@ public final class PatchedDataComponentMap implements DataComponentMap, net.caff
+ 
+     private void ensureMapOwnership() {
+-        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking() && this.subscriber != null) this.subscriber.lithium$notify((PatchedDataComponentMap) (Object) this, 0); // DivineMC - lithium: sleeping_block_entity
++        if (this.subscriber != null) this.subscriber.lithium$notify(this, 0); // Quantum - consumers subscribe only when their feature is enabled
+         if (this.copyOnWrite) {
+             this.patch = new Reference2ObjectArrayMap<>(this.patch);
+diff --git a/net/minecraft/world/item/ItemStack.java b/net/minecraft/world/item/ItemStack.java
+index 5516819..c820098 100644
+--- a/net/minecraft/world/item/ItemStack.java
++++ b/net/minecraft/world/item/ItemStack.java
+@@ -995,6 +995,7 @@ public final class ItemStack implements DataComponentHolder, ItemInstance, net.c
+ 
+     public <T> @Nullable T set(final DataComponentType<T> type, final @Nullable T value) {
+-        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking() && type == DataComponents.ENCHANTMENTS && this.subscriber instanceof net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.EnchantmentSubscriber<ItemStack> enchantmentSubscriber) enchantmentSubscriber.lithium$notifyAfterEnchantmentChange(this, this.subscriberData); // DivineMC - lithium: sleeping_block_entity
+-        return this.components.set(type, value);
++        T previous = this.components.set(type, value);
++        if (type == DataComponents.ENCHANTMENTS && this.subscriber instanceof net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.EnchantmentSubscriber<ItemStack> enchantmentSubscriber) enchantmentSubscriber.lithium$notifyAfterEnchantmentChange(this, this.subscriberData); // Quantum - after mutation, as required by the subscriber contract
++        return previous;
+     }
+ 
+@@ -1342,5 +1343,5 @@ public final class ItemStack implements DataComponentHolder, ItemInstance, net.c
+     public void setCount(final int count) {
+         // DivineMC start - lithium: sleeping_block_entity
+-        if (dev.quantumspigot.server.QuantumRuntime.mechanics().equipmentTracking() && count != this.count) {
++        if (this.subscriber != null && count != this.count) { // Quantum - shared mutation hooks; features opt in by subscribing
+             if (this.subscriber instanceof net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.CountChangeSubscriber<ItemStack> countChangeSubscriber) {
+                 countChangeSubscriber.lithium$notifyCount(this, this.subscriberData, count);
+diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
+index fef616d..b72cc35 100644
+--- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
+@@ -35,5 +35,10 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     private static final int NO_COOLDOWN_TIME = -1;
+     private static final Component DEFAULT_NAME = Component.translatable("container.hopper");
+-    private NonNullList<ItemStack> items = NonNullList.withSize(5, ItemStack.EMPTY);
++    private NonNullList<ItemStack> items = this.quantumTrackItems(NonNullList.withSize(5, ItemStack.EMPTY));
++
++    private NonNullList<ItemStack> quantumTrackItems(NonNullList<ItemStack> contents) {
++        return this.getClass() == HopperBlockEntity.class && dev.quantumspigot.server.QuantumRuntime.mechanics().hopperInventoryCache()
++            ? new dev.quantumspigot.server.inventory.TrackedItemList(contents) : contents;
++    }
+     public int cooldownTime = -1;
+     private long tickedGameTime;
+@@ -82,5 +87,5 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
+-        this.items = NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY);
++        this.setItems(NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY));
+         if (!this.tryLoadLootTable(input)) {
+             ContainerHelper.loadAllItems(input, this.items);
+@@ -151,4 +156,6 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+         hopper.unpackLootTable(null);
+ 
++        if (hopper.items instanceof dev.quantumspigot.server.inventory.TrackedItemList tracked) return tracked.fullState();
++
+         final List<ItemStack> hopperItems = hopper.items;
+ 
+@@ -762,5 +769,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     @Override
+     protected void setItems(final NonNullList<ItemStack> items) {
+-        this.items = items;
++        if (this.items == items) return;
++        if (this.items instanceof dev.quantumspigot.server.inventory.TrackedItemList tracked) tracked.detach();
++        this.items = this.quantumTrackItems(items);
+     }
+ 
