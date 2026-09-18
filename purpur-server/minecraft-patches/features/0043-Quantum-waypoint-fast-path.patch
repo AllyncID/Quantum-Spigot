@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 12:30:00 +0800
+Subject: [PATCH] Avoid normal waypoint connection snapshots
+
+Keep the existing opt-in waypoint lifecycle and broken-connection snapshot path.
+Normal updates iterate the stable connection map directly, avoiding per-update
+ArrayList allocation while preserving repair ordering when a connection is broken.
+
+--- a/net/minecraft/server/waypoints/ServerWaypointManager.java
++++ b/net/minecraft/server/waypoints/ServerWaypointManager.java
+@@ -50,8 +50,22 @@
+         if (this.waypoints.contains(waypoint)) {
+             // Quantum - retain snapshot callbacks and the live retry of broken/removed connections.
+             if (this.quantumWaypointCollections) {
+-                for (var entry : new java.util.ArrayList<>(this.connections.column(waypoint).entrySet())) {
+-                    this.updateConnection(entry.getKey(), waypoint, entry.getValue());
++                var column = this.connections.column(waypoint);
++                boolean hasBroken = false;
++                for (var connection : column.values()) {
++                    if (connection.isBroken()) {
++                        hasBroken = true;
++                        break;
++                    }
++                }
++                if (hasBroken) {
++                    for (var entry : new java.util.ArrayList<>(column.entrySet())) {
++                        this.updateConnection(entry.getKey(), waypoint, entry.getValue());
++                    }
++                } else {
++                    for (var entry : column.entrySet()) {
++                        if (entry.getKey() != waypoint) entry.getValue().update();
++                    }
+                 }
+                 for (ServerPlayer player : this.players) {
+                     var row = this.quantumConnectionRows.get(player);
+@@ -97,12 +111,26 @@
+         if (!this.locatorBarEnabled) return; // Paper - optimize ServerWaypointManager with locator bar disabled
+         // Quantum - no set hashing for an already unique entry set; avoid transient Guava row views.
+         if (this.quantumWaypointCollections) {
+-            for (var entry : new java.util.ArrayList<>(this.connections.row(player).entrySet())) {
+-                this.updateConnection(player, entry.getKey(), entry.getValue());
++            var row = this.connections.row(player);
++            boolean hasBroken = false;
++            for (var connection : row.values()) {
++                if (connection.isBroken()) {
++                    hasBroken = true;
++                    break;
++                }
++            }
++            if (hasBroken) {
++                for (var entry : new java.util.ArrayList<>(row.entrySet())) {
++                    this.updateConnection(player, entry.getKey(), entry.getValue());
++                }
++            } else {
++                for (var entry : row.entrySet()) {
++                    entry.getValue().update();
++                }
+             }
+             for (WaypointTransmitter waypoint : this.waypoints) {
+-                var row = this.quantumConnectionRows.get(player);
+-                if (row == null || !row.containsKey(waypoint)) this.createConnection(player, waypoint);
++                var quantumRow = this.quantumConnectionRows.get(player);
++                if (quantumRow == null || !quantumRow.containsKey(waypoint)) this.createConnection(player, waypoint);
+             }
+             return;
+         }

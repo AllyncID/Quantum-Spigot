@@ -120,3 +120,9 @@ All other unimplemented rows remain pending; default-OFF configuration is not
 counted as an implementation without a connected execution path.
 
 Visibility lookup, immutable movement identity and optional Netty non-flush scheduling now have connected default-OFF paths (Paper 0007, M0037/M0038). Live collision contexts are a separate default-OFF behavior option (M0039); explicit position/placement contexts remain snapshots. Remaining audit rows still require implementation or a justified rejection.
+
+Waypoint follow-up (0043, 2026-09-18): healthy opt-in connections avoid the
+normal per-update snapshot allocation, while broken-connection retries retain
+the snapshot path. The matched 200-player spread run still fails with locator
+bar enabled and passes the diagnostic control with locator bar disabled; the
+Survival profile keeps vanilla locator behavior enabled.

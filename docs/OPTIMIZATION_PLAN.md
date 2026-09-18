@@ -90,3 +90,14 @@ No such new competitive claim will be made from the live investigation.
 
 Update this file and the audit after every batch. A failed/neutral candidate is
 reverted or explicitly deferred; unfinished tests must remain visible.
+
+## Waypoint follow-up — 2026-09-18
+
+Patch 0043 now iterates healthy opt-in connections directly and keeps the
+snapshot path only for broken-connection repair. The lifecycle test and patch
+reapplication pass. On the same 200-player spread fixture, locator bar enabled
+still settles around 56 ms rolling mean and fails the near-20-TPS gate; the
+locator-off control stays at 20 TPS with roughly 31 ms mean, p95 35 ms and p99
+42 ms. The control is diagnostic only. Vanilla locator behavior remains
+enabled in Survival because changing it would trade gameplay for benchmark
+headroom.

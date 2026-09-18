@@ -18,6 +18,9 @@ The driver also accepts `-Dquantum.arena-y=300` and
 Default coordinates remain Y=160 and spacing=8. The controller must build and
 place players at the matching coordinates before creating `<output.json>.go`.
 Before that marker the clients are in setup, not an active workload.
+Scenarios that point at a saved fixture with `worldDirectory` may set
+`arenaPrepared: true`; this skips the command-heavy arena construction phase
+and measures only the loaded world plus player workload.
 For an authorized loopback backend requiring Velocity forwarding, set
 `QUANTUM_FORWARDING_SECRET_FILE` to the existing secret file. The driver signs
 only its own `QTestNNN` profiles; it never prints the secret. Without that opt-in,

@@ -27,7 +27,9 @@ if (mode === 'prepare') {
   if (![viewDistance, simulationDistance].every(n => Number.isInteger(n) && n >= 2 && n <= 16)) throw Error('Distances must be 2..16');
   const jar = scenario?.jar ? path.resolve(scenario.jar) : path.join(repository, scenario?.server === 'purpur' ? 'artifacts/purpur-26.2-baseline.jar' : 'artifacts/quantumspigot-26.2-build.DEV.jar');
   const arenaY = scenario?.arenaY ?? 160, arenaSpacing = scenario?.arenaSpacing ?? 8;
+  const arenaPrepared = scenario?.arenaPrepared ?? false;
   if (!Number.isInteger(arenaY) || arenaY < 80 || arenaY > 310 || !Number.isInteger(arenaSpacing) || arenaSpacing < 8 || arenaSpacing > 64) throw Error('Invalid arena bounds');
+  if (typeof arenaPrepared !== 'boolean') throw Error('arenaPrepared must be boolean');
   if (scenario && (!Array.isArray(scenario.stages) || !scenario.stages.length || scenario.stages.some(s =>
     !Number.isInteger(s.players) || s.players < 1 || s.players > 300 || !Number.isInteger(s.seconds)
     || s.seconds < 60 || s.seconds > 1800 || !['mixed', 'explore'].includes(s.profile)))) throw Error('Invalid local scenario');
@@ -66,7 +68,7 @@ if (mode === 'prepare') {
     heap: {initial: '1G', maximum: '6G'}, plugins: [], worldSeed: 728194, viewDistance, simulationDistance,
     network: 'loopback; server and bots share one host; offline-mode authentication is not measured',
     stages: scenario?.stages ?? [{players: 1, seconds: 60}, {players: 20, seconds: 120}], idleSeconds: 60,
-    arenaY, arenaSpacing, worldDirectory: scenario?.worldDirectory ?? null,
+    arenaY, arenaSpacing, arenaPrepared, worldDirectory: scenario?.worldDirectory ?? null,
     waypointCollections: scenario?.waypointCollections ?? false, jfr: scenario?.jfr !== false,
     performance: !!scenario, warmupSeconds: scenario ? 60 : 0,
     server: scenario?.server ?? 'quantum', nativeMetrics: !!scenario?.nativeMetrics,
@@ -91,6 +93,7 @@ async function run(directory) {
   const config = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'));
   config.arenaY ??= 160;
   config.arenaSpacing ??= 8;
+  config.arenaPrepared ??= false;
   if (config.status !== 'PREPARED_NOT_RUN' || config.directory !== directory || fs.existsSync(path.join(directory, 'result.json'))) throw Error('Prepare a fresh run');
   if (config.host !== '127.0.0.1' || config.plugins.length || config.stages.some(s => s.players < 1 || s.players > 300)) throw Error('Local scope: loopback, no plugins, at most 300 bots');
   if (!/^eula\s*=\s*true\s*$/mi.test(fs.readFileSync(path.join(directory, 'eula.txt'), 'utf8'))) throw Error('Minecraft EULA has not been accepted by the operator; no server was started');
@@ -173,13 +176,15 @@ async function run(directory) {
     if (config.performance) {
       phase = 'arena-setup';
       const count = Math.max(...config.stages.map(s => s.players));
-      for (let i = 0; i < count; i++) command(`forceload add ${i % 20 * config.arenaSpacing} ${Math.floor(i / 20) * config.arenaSpacing}`);
-      await healthyWait(15_000);
-      for (let i = 0; i < count; i++) {
-        const x = i % 20 * config.arenaSpacing, z = Math.floor(i / 20) * config.arenaSpacing, y = config.arenaY;
-        command(`fill ${x} ${y - 1} ${z} ${x + 7} ${y - 1} ${z + 7} minecraft:stone`);
-        command(`fill ${x} ${y} ${z} ${x + 7} ${y + 6} ${z + 7} minecraft:air`);
-        await healthyWait(30);
+      if (!config.arenaPrepared) {
+        for (let i = 0; i < count; i++) command(`forceload add ${i % 20 * config.arenaSpacing} ${Math.floor(i / 20) * config.arenaSpacing}`);
+        await healthyWait(15_000);
+        for (let i = 0; i < count; i++) {
+          const x = i % 20 * config.arenaSpacing, z = Math.floor(i / 20) * config.arenaSpacing, y = config.arenaY;
+          command(`fill ${x} ${y - 1} ${z} ${x + 7} ${y - 1} ${z + 7} minecraft:stone`);
+          command(`fill ${x} ${y} ${z} ${x + 7} ${y + 6} ${z + 7} minecraft:air`);
+          await healthyWait(30);
+        }
       }
       command(`setworldspawn 4 ${config.arenaY} 4\ntime set day`);
       await healthyWait(5000);
