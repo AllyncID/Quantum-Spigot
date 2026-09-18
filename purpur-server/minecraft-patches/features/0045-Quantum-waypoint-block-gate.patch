@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 22:00:00 +0800
+Subject: [PATCH] Skip locator reconciliation within one block
+
+Locator connection visibility and position state only change materially when a
+receiver crosses a block boundary. Keep the vanilla connection and packet
+behavior, but avoid repeating the full receiver reconciliation for sub-block
+movement. Teleports and block changes still take the normal path.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/minecraft/server/waypoints/ServerWaypointManager.java
+--- a/net/minecraft/server/waypoints/ServerWaypointManager.java
++++ b/net/minecraft/server/waypoints/ServerWaypointManager.java
+@@ -20,6 +20,7 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+     private final Set<ServerPlayer> players = new HashSet<>();
+     private final Table<ServerPlayer, WaypointTransmitter, WaypointTransmitter.Connection> connections;
+     private final Map<ServerPlayer, Map<WaypointTransmitter, WaypointTransmitter.Connection>> quantumConnectionRows;
++    private final java.util.IdentityHashMap<ServerPlayer, Long> quantumPlayerBlocks;
+     // Paper start - optimize ServerWaypointManager with locator bar disabled
+     public boolean locatorBarEnabled; // Avoid a gamerule lookup for each player
+     public final boolean quantumWaypointCollections; // Quantum - startup policy, no gameplay offload
+@@ -29,6 +30,7 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+         this.quantumWaypointCollections = dev.quantumspigot.server.QuantumRuntime.waypointCollections(serverLevel.dimension().identifier().toString());
+         // Same linked row/column ordering as HashBasedTable; only the table mutates this backing map.
+         this.quantumConnectionRows = this.quantumWaypointCollections ? new java.util.LinkedHashMap<>() : null;
++        this.quantumPlayerBlocks = this.quantumWaypointCollections ? new java.util.IdentityHashMap<>() : null;
+         this.connections = this.quantumWaypointCollections
+             ? Tables.newCustomTable(this.quantumConnectionRows, java.util.LinkedHashMap::new) : HashBasedTable.create();
+     }
+@@ -95,6 +97,7 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+ 
+     public void addPlayer(final ServerPlayer player) {
+         this.players.add(player);
++        if (this.quantumWaypointCollections) this.quantumPlayerBlocks.put(player, player.blockPosition().asLong());
+ 
+         if (this.locatorBarEnabled) { // Paper - optimize ServerWaypointManager with locator bar disabled
+         for (WaypointTransmitter waypoint : this.waypoints) {
+@@ -111,6 +114,9 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+         if (!this.locatorBarEnabled) return; // Paper - optimize ServerWaypointManager with locator bar disabled
+         // Quantum - no set hashing for an already unique entry set; avoid transient Guava row views.
+         if (this.quantumWaypointCollections) {
++            final long block = player.blockPosition().asLong();
++            final Long previousBlock = this.quantumPlayerBlocks.put(player, block);
++            if (previousBlock != null && previousBlock.longValue() == block) return;
+             var row = this.connections.row(player);
+             boolean hasBroken = false;
+             for (var connection : row.values()) {
+@@ -152,6 +158,7 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+         });
+         this.untrackWaypoint(player);
+         this.players.remove(player);
++        if (this.quantumWaypointCollections) this.quantumPlayerBlocks.remove(player);
+     }
+ 
+     public void breakAllConnections() {

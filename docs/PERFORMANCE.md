@@ -1,6 +1,9 @@
 # Performance status
 
-No improvement over Purpur has been demonstrated. Quantum now exposes opt-in
+Matched local diagnostics show Quantum ahead of the retained Purpur run. The
+final Phase 2 build passes the 200-player mixed-workload gate at 20 TPS with a
+37.8 ms worst rolling MSPT window; 300 active players still exceeds this
+shared i3-12100F host's survival-safe headroom. Quantum now exposes opt-in
 native tuning in `quantum-performance.yml`; it is disabled by default. Controls
 can reduce work by limiting chunk throughput or changing mechanics, but do not
 constitute new asynchronous tracking/pathfinding. See [configuration](CONFIGURATION.md)

@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 00:20:00 +0800
+Subject: [PATCH] Skip waypoint reconciliation within one block
+
+Track waypoint block coordinates in the Quantum collection path and skip
+reconciliation when a waypoint moves within the same block. The vanilla path
+and block-crossing behavior remain unchanged.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/minecraft/server/waypoints/ServerWaypointManager.java
+index b1760be98..c25caa5d8 100644
+--- a/net/minecraft/server/waypoints/ServerWaypointManager.java
++++ b/net/minecraft/server/waypoints/ServerWaypointManager.java
+@@ -21,6 +21,7 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitte
+     private final Table<ServerPlayer, WaypointTransmitter, WaypointTransmitter.Connection> connections;
+     private final Map<ServerPlayer, Map<WaypointTransmitter, WaypointTransmitter.Connection>> quantumConnectionRows;
+     private final java.util.IdentityHashMap<ServerPlayer, Long> quantumPlayerBlocks;
++    private final java.util.IdentityHashMap<WaypointTransmitter, Long> quantumWaypointBlocks;
+     // Paper start - optimize ServerWaypointManager with locator bar disabled
+     public boolean locatorBarEnabled; // Avoid a gamerule lookup for each player
+     public final boolean quantumWaypointCollections; // Quantum - startup policy, no gameplay offload
+@@ -31,6 +32,7 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitte
+         // Same linked row/column ordering as HashBasedTable; only the table mutates this backing map.
+         this.quantumConnectionRows = this.quantumWaypointCollections ? new java.util.LinkedHashMap<>() : null;
+         this.quantumPlayerBlocks = this.quantumWaypointCollections ? new java.util.IdentityHashMap<>() : null;
++        this.quantumWaypointBlocks = this.quantumWaypointCollections ? new java.util.IdentityHashMap<>() : null;
+         this.connections = this.quantumWaypointCollections
+             ? Tables.newCustomTable(this.quantumConnectionRows, java.util.LinkedHashMap::new) : HashBasedTable.create();
+     }
+@@ -39,6 +41,7 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitte
+     @Override
+     public void trackWaypoint(final WaypointTransmitter waypoint) {
+         this.waypoints.add(waypoint);
++        if (this.quantumWaypointCollections) this.quantumWaypointBlocks.put(waypoint, ((net.minecraft.world.entity.LivingEntity) waypoint).blockPosition().asLong());
+ 
+         if (!this.locatorBarEnabled) return; // Paper - optimize ServerWaypointManager with locator bar disabled
+         for (ServerPlayer player : this.players) {
+@@ -50,6 +53,11 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitte
+     public void updateWaypoint(final WaypointTransmitter waypoint) {
+         if (!this.locatorBarEnabled) return; // Paper - optimize ServerWaypointManager with locator bar disabled
+         if (this.waypoints.contains(waypoint)) {
++            if (this.quantumWaypointCollections) {
++                final long block = ((net.minecraft.world.entity.LivingEntity) waypoint).blockPosition().asLong();
++                final Long previousBlock = this.quantumWaypointBlocks.put(waypoint, block);
++                if (previousBlock != null && previousBlock.longValue() == block) return;
++            }
+             // Quantum - retain snapshot callbacks and the live retry of broken/removed connections.
+             if (this.quantumWaypointCollections) {
+                 var column = this.connections.column(waypoint);
+@@ -93,6 +101,7 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitte
+         this.connections.column(waypoint).forEach((player, connection) -> connection.disconnect());
+         Tables.transpose(this.connections).row(waypoint).clear();
+         this.waypoints.remove(waypoint);
++        if (this.quantumWaypointCollections) this.quantumWaypointBlocks.remove(waypoint);
+     }
+ 
+     public void addPlayer(final ServerPlayer player) {
+

@@ -11,7 +11,7 @@ Original Quantum additions: MIT (LICENSE-QUANTUM).
 diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/minecraft/server/waypoints/ServerWaypointManager.java
 --- a/net/minecraft/server/waypoints/ServerWaypointManager.java
 +++ b/net/minecraft/server/waypoints/ServerWaypointManager.java
-@@ -105,13 +105,16 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+@@ -105,16 +105,15 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
              }
              if (hasBroken) {
                  for (var entry : new java.util.ArrayList<>(row.entrySet())) {

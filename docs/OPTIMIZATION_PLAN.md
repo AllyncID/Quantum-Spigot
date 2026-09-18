@@ -101,3 +101,15 @@ locator-off control stays at 20 TPS with roughly 31 ms mean, p95 35 ms and p99
 42 ms. The control is diagnostic only. Vanilla locator behavior remains
 enabled in Survival because changing it would trade gameplay for benchmark
 headroom.
+
+## Phase 2 nearest-player follow-up — 2026-09-18
+
+The matched baseline averages 17.6 TPS and 56.775 ms MSPT with locator and
+waypoint collections enabled. `EntityGetter.getNearestPlayer` is 13.21% of the
+JFR sample and `NaturalSpawner.spawnCategoryForPosition` is 3.07%.
+
+Two small candidates were measured and reverted. A 256-block entity-index AABB
+made entity queries 41.88% of JFR samples and reduced the run to roughly 2.3
+TPS. An indexed `List` loop remained around 58.7 ms MSPT and 16.9–17.9 TPS.
+The full record is in `docs/HIGH_PLAYER_OPTIMIZATION.md` and
+`benchmarks/results/2026-09-18-phase2-nearest-player.md`.
