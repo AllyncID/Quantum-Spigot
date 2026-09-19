@@ -12,7 +12,7 @@ The fixture does not contain valid runs at every requested point. Missing values
 | Players | TPS evidence | Mean MSPT | p95 / p99 MSPT | Main-thread evidence | Host/fixture evidence |
 |---:|---|---:|---|---|---|
 | 200 | 20.00 minimum | 37.10–37.80 | 41.92 / 47.86 (0048 run) | no retained 200 JFR profile in the current audit set | view 8 / sim 6; all bots and actions passed |
-| 300 | 6.2–6.8 TPS in the active mixed fixture | 146.9–160 | n/a for the stopped windows | NaturalSpawner, HashMap/LongOpenHashSet, entity tracking, player lookup | one flight kick in the normal fixture; `allow-flight` was test-only |
+| 300 | **20.00 minimum in the validated prepared mixed fixture**; earlier 6.2–6.8 run was invalidated by an uncovered/config-mismatched fixture | **35.30** | n/a in native collector | pre-change watchdog: locator `updateWaypoint`/`EntityBlockConnection`; post-change JFR: Moonrise entity collections and NaturalSpawner | 300 spawned, 0 unexpected disconnects; `allow-flight` was benchmark-only |
 | 350 | n/a | n/a | n/a | no completed stage | no retained run |
 | 400 | 5.38 five-second TPS during live Survival ramp | 55.18 (60 s) | 158.45 / 208.04 | live `/quantum tps` snapshot; ramp was not a valid gate window | 400 online, 500 max slots; same-host bot contention |
 | 450 | 19.99 one-minute minimum in the completed prepared-arena run; the separate live Survival run stalled during cleanup | 46.53 | 57.19 / 67.35 | `getNode`, entity collection, `TrackedEntity.updatePlayer`, `LongOpenHashSet.contains`, `NaturalSpawner.getNearestPlayerForSpawning` | 1,693 loaded chunks, 1,749 entities, 2.68 GiB heap; 450 spawned, 0 unexpected disconnects |
@@ -68,7 +68,7 @@ None of those references justifies region threading or a gameplay nerf in this p
 
 ### J. Collapse point and next experiment
 
-The first bend is between the validated 200-player run (about 37 ms) and the 300-player active mixed fixture (about 147–160 ms). The 400-player live ramp confirms that the same work becomes a stall during real Survival admission. At 450 in the prepared arena, the remaining steady-state cost is concentrated in entity viewer maintenance, Moonrise entity collection/map lookups, and natural-spawn nearest-player checks; locator cadence is no longer the leading cost.
+The first valid bend is between the validated 200-player run (about 37 ms) and the pre-change 300-player fixture, which mixed an uncovered arena with an inactive Quantum waypoint-collection path. After the locator cadence and receiver chunk gates were active, the prepared 300-player view 8 / simulation 6 fixture measured 35.30 ms mean and 20.00 minimum TPS. The 400-player live ramp still confirms that admission and cleanup can become a separate stall during real Survival startup. At 450 in the prepared arena, the remaining steady-state cost is concentrated in entity viewer maintenance, Moonrise entity collection/map lookups, and natural-spawn nearest-player checks; locator cadence is no longer the leading cost.
 
 **First experiment:** hold the source unchanged and repeat the prepared 450 workload with the bot driver process pinned away from the server process where Windows allows it, recording server JFR, host CPU, bot CPU, queue counters, and the same rolling MSPT gate. This isolates P0 host contention before a risky entity-tracking patch is written.
 
@@ -78,4 +78,4 @@ The first retained source change after that A/B is the safe empty-map short-circ
 
 ## Decision
 
-Do not add another async pool, region threading, or gameplay nerf from this audit. The next code change is justified only after the host-contention control and a direct measurement of the entity viewer loop. The current evidence supports a real 200-player gate, a prepared-arena 450 run below 40 ms mean, and no claim of 450-player 20-TPS survival capacity on this host.
+Do not add another async pool, region threading, or gameplay nerf from this audit. The current evidence supports validated 200- and 300-player prepared-arena gates, while 450 remains above the strict mean/percentile target and still needs a separate live Survival capacity run.

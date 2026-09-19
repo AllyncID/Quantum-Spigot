@@ -33,7 +33,7 @@ diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/min
 +    private boolean quantumShouldUpdateLocator(final long gameTime, final int entityId) {
 +        final int players = this.players.size();
 +        if (players <= 200) return true;
-+        return Math.floorMod(gameTime + entityId, Math.max(1, (players + 4) / 5)) == 0;
++        return Math.floorMod(gameTime + entityId, Math.max(60, (players + 4) / 2)) == 0;
 +    }
 
      private void createConnection(final ServerPlayer player, final WaypointTransmitter waypoint) {

@@ -17,6 +17,7 @@ diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/min
      private final Table<ServerPlayer, WaypointTransmitter, WaypointTransmitter.Connection> connections;
      private final Map<ServerPlayer, Map<WaypointTransmitter, WaypointTransmitter.Connection>> quantumConnectionRows;
 +    private final java.util.IdentityHashMap<ServerPlayer, Long> quantumPlayerBlocks;
++    private final java.util.IdentityHashMap<ServerPlayer, Long> quantumPlayerChunks;
      // Paper start - optimize ServerWaypointManager with locator bar disabled
      public boolean locatorBarEnabled; // Avoid a gamerule lookup for each player
      public final boolean quantumWaypointCollections; // Quantum - startup policy, no gameplay offload
@@ -25,6 +26,7 @@ diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/min
          // Same linked row/column ordering as HashBasedTable; only the table mutates this backing map.
          this.quantumConnectionRows = this.quantumWaypointCollections ? new java.util.LinkedHashMap<>() : null;
 +        this.quantumPlayerBlocks = this.quantumWaypointCollections ? new java.util.IdentityHashMap<>() : null;
++        this.quantumPlayerChunks = this.quantumWaypointCollections ? new java.util.IdentityHashMap<>() : null;
          this.connections = this.quantumWaypointCollections
              ? Tables.newCustomTable(this.quantumConnectionRows, java.util.LinkedHashMap::new) : HashBasedTable.create();
      }
@@ -32,7 +34,10 @@ diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/min
  
      public void addPlayer(final ServerPlayer player) {
          this.players.add(player);
-+        if (this.quantumWaypointCollections) this.quantumPlayerBlocks.put(player, player.blockPosition().asLong());
++        if (this.quantumWaypointCollections) {
++            this.quantumPlayerBlocks.put(player, player.blockPosition().asLong());
++            this.quantumPlayerChunks.put(player, player.chunkPosition().pack());
++        }
  
          if (this.locatorBarEnabled) { // Paper - optimize ServerWaypointManager with locator bar disabled
          for (WaypointTransmitter waypoint : this.waypoints) {
@@ -40,6 +45,9 @@ diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/min
          if (!this.locatorBarEnabled) return; // Paper - optimize ServerWaypointManager with locator bar disabled
          // Quantum - no set hashing for an already unique entry set; avoid transient Guava row views.
          if (this.quantumWaypointCollections) {
++            final long chunk = player.chunkPosition().pack();
++            final Long previousChunk = this.quantumPlayerChunks.put(player, chunk);
++            if (previousChunk != null && previousChunk.longValue() == chunk) return;
 +            final long block = player.blockPosition().asLong();
 +            final Long previousBlock = this.quantumPlayerBlocks.put(player, block);
 +            if (previousBlock != null && previousBlock.longValue() == block) return;
@@ -50,7 +58,10 @@ diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/min
          });
          this.untrackWaypoint(player);
          this.players.remove(player);
-+        if (this.quantumWaypointCollections) this.quantumPlayerBlocks.remove(player);
++        if (this.quantumWaypointCollections) {
++            this.quantumPlayerBlocks.remove(player);
++            this.quantumPlayerChunks.remove(player);
++        }
      }
  
      public void breakAllConnections() {
