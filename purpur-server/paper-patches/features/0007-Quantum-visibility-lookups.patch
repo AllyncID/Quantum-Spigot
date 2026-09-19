@@ -14,7 +14,7 @@ This seems stupid, but it does seem that it improves the performance a bit, and 
 We also create a "canSee" method tailored for "ChunkMap#updatePlayer()", a method without the equals check (the "updatePlayer()" already checks if the entity is the same entity) because the CraftPlayer's `equals()` check is a *bit* expensive compared to only checking the object's identity, and because the identity has already been check, we don't need to check it twice.
 
 Port source: BX-Team/DivineMC@039981b0bf973ea9bee0f2521b2c01d9bb419802
-Quantum adaptation: default-OFF guard; preserve original fallback and explicit context values.
+Quantum adaptation: keep the feature configurable while short-circuiting empty visibility maps in both modes.
 Original licensing/attribution retained; outside LICENSE-QUANTUM.
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
@@ -37,8 +37,7 @@ index 2571b73f9..22ddfd53f 100644
      public boolean canSee(org.bukkit.entity.Entity entity) {
 -        return this.equals(entity) || entity.isVisibleByDefault() ^ this.invertedVisibilityEntities.containsKey(entity.getUniqueId()); // SPIGOT-7312: Can always see self
 +        return this.equals(entity) || entity.isVisibleByDefault() ^
-+            ((!dev.quantumspigot.server.QuantumRuntime.network().visibilityLookup() || !this.invertedVisibilityEntities.isEmpty())
-+                && this.invertedVisibilityEntities.containsKey(entity.getUniqueId())); // Quantum - retain self-visibility and inversion semantics
++            (!this.invertedVisibilityEntities.isEmpty() && this.invertedVisibilityEntities.containsKey(entity.getUniqueId())); // Quantum - empty-map fast path; retain self-visibility and inversion semantics
      }
  
      public boolean canSeePlayer(UUID uuid) {
