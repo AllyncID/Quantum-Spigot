@@ -55,7 +55,16 @@ The official-style fixture is pre-generated and uses view distance 6 / simulatio
 
 ### I. Existing patch and upstream reference audit
 
-Retained Quantum patches are 0048 (spawn nearest-player lookup), 0049 (adaptive locator cadence), 0052 (login admission), 0053 (offline profile lookup), and startup branding. Patch 0050 was measured and removed because it regressed the 450 percentile result. The source already contains Moonrise's spatial entity infrastructure; Leaf/Pufferfish-style region threading is not present and is outside this phase. Upstream PRs named by the phase document still need a version-matched manual comparison before any port is attempted.
+Retained Quantum patches are 0048 (spawn nearest-player lookup), 0049 (adaptive locator cadence), 0052 (login admission), 0053 (offline profile lookup), and startup branding. Patch 0050 was measured and removed because it regressed the 450 percentile result. The source already contains Moonrise's spatial entity infrastructure; Leaf/Pufferfish-style region threading is not present and is outside this phase.
+
+The version-matched Leaf references were checked before deciding what to port:
+
+* [Leaf #810](https://github.com/Winds-Studio/Leaf/pull/810) replaces the entity tracker with a fluid-map design. It is a large tracker replacement, so it was not copied over an already-present Moonrise tracker without a parity fixture.
+* [Leaf #528](https://github.com/Winds-Studio/Leaf/pull/528) adds a KD-tree for entity activation and deduplicates entities. Quantum has no matching Leaf activation layer in the current source, so a direct port would add a second spatial system rather than fix the measured tracker loop.
+* [Leaf #850](https://github.com/Winds-Studio/Leaf/pull/850) bounds pushable-entity collection after collision limits are satisfied. The current 450 JFR does not put collision collection in the leading methods, so it remains a follow-up experiment.
+* [Leaf #852](https://github.com/Winds-Studio/Leaf/pull/852) removes redundant path recomputation/node visits. Pathfinding is not a leading method in the retained 450 profile, so it was not ported speculatively.
+
+None of those references justifies region threading or a gameplay nerf in this phase.
 
 ### J. Collapse point and next experiment
 
