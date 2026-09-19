@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 06:10:00 +0800
+Subject: [PATCH] Add QuantumSpigot startup identity
+
+Show one compact, dynamic QuantumSpigot banner through Paper's existing
+Adventure logger. File appenders strip ANSI while terminal output keeps the
+existing logger color path. Upstream brand compatibility remains unchanged.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/src/main/java/io/papermc/paper/PaperBootstrap.java b/src/main/java/io/papermc/paper/PaperBootstrap.java
+--- a/src/main/java/io/papermc/paper/PaperBootstrap.java
++++ b/src/main/java/io/papermc/paper/PaperBootstrap.java
+@@ -3,12 +3,17 @@ import java.util.List;
+ import java.util.List;
+ import joptsimple.OptionSet;
+ import net.minecraft.SharedConstants;
+ import net.minecraft.server.Main;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.logger.slf4j.ComponentLogger;
++import net.kyori.adventure.text.format.NamedTextColor;
++import org.apache.logging.log4j.LogManager;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+
+ public final class PaperBootstrap {
+     private static final Logger LOGGER = LoggerFactory.getLogger("bootstrap");
++    private static final ComponentLogger COMPONENT_LOGGER = ComponentLogger.logger(LogManager.getRootLogger().getName());
+
+     private PaperBootstrap() {
+     }
+@@ -20,9 +25,31 @@ public final class PaperBootstrap {
+         SharedConstants.CHECK_DATA_FIXER_SCHEMA = Boolean.getBoolean("paper.updatingMinecraft");
+         // Paper end - Perf: Skip data fixer schema sanity check
+
++        printQuantumBranding();
+         getStartupVersionMessages().forEach(LOGGER::info);
+
+         Main.main(options);
+     }
+
++    private static void printQuantumBranding() {
++        final ServerBuildInfo build = ServerBuildInfo.buildInfo();
++        final String version = build.asString(ServerBuildInfo.StringRepresentation.VERSION_SIMPLE);
++        final String java = System.getProperty("java.specification.version", "unknown");
++        final Component border = Component.text("+------------------------------------------------------------+", NamedTextColor.DARK_GRAY);
++        COMPONENT_LOGGER.info(border);
++        COMPONENT_LOGGER.info(Component.text("| ", NamedTextColor.DARK_GRAY)
++            .append(Component.text("QuantumSpigot", NamedTextColor.AQUA))
++            .append(Component.text("                                        |", NamedTextColor.DARK_GRAY)));
++        COMPONENT_LOGGER.info(Component.text("| High-Performance Minecraft Server                         |", NamedTextColor.GRAY));
++        COMPONENT_LOGGER.info(Component.text("| Forked & maintained by ", NamedTextColor.GRAY)
++            .append(Component.text("Allync", NamedTextColor.GOLD))
++            .append(Component.text("                              |", NamedTextColor.GRAY)));
++        COMPONENT_LOGGER.info(Component.text("| Version ", NamedTextColor.DARK_GRAY)
++            .append(Component.text(version, NamedTextColor.WHITE))
++            .append(Component.text("  Java ", NamedTextColor.DARK_GRAY))
++            .append(Component.text(java, NamedTextColor.WHITE))
++            .append(Component.text("  Base Purpur / Paper              |", NamedTextColor.DARK_GRAY)));
++        COMPONENT_LOGGER.info(border);
++    }
++
+     private static List<String> getStartupVersionMessages() {

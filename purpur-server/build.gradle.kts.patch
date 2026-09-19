@@ -6,13 +6,13 @@
  import java.time.Instant
 +import kotlin.io.path.createParentDirectories
 +import kotlin.io.path.writeText
- 
+
  plugins {
      `java-library`
 @@ -22,9 +24,21 @@
      minecraftVersion = providers.gradleProperty("mcVersion")
      gitFilePatches = false
- 
+
 -    updatingMinecraft {
 +    // Purpur start - Rebrand
 +    val purpur = forks.register("purpur") {
@@ -31,12 +31,12 @@
 -    }
 +    }*/ // Purpur end - TODO - snapshot - we don't need this
  }
- 
+
  tasks.generateDevelopmentBundle {
 @@ -86,7 +100,21 @@
      }
  }
- 
+
 -val log4jPlugins = sourceSets.create("log4jPlugins")
 +// Purpur start - Rebrand
 +sourceSets {
@@ -58,7 +58,7 @@
  }
 @@ -109,7 +137,7 @@
  }
- 
+
  dependencies {
 -    implementation(project(":paper-api"))
 +    implementation(project(":purpur-api")) // Purpur
@@ -68,7 +68,7 @@
 @@ -135,6 +163,10 @@
      implementation("org.ow2.asm:asm-commons:9.9.1")
      implementation("org.spongepowered:configurate-yaml:4.2.0")
- 
+
 +    implementation("org.mozilla:rhino-runtime:1.7.14") // Purpur
 +    implementation("org.mozilla:rhino-engine:1.7.14") // Purpur
 +    implementation("dev.omega24:upnp4j:1.0") // Purpur
@@ -78,7 +78,7 @@
      runtimeOnly("org.xerial:sqlite-jdbc:3.49.1.0")
 @@ -160,25 +192,31 @@
  }
- 
+
  tasks.jar {
 +    from(rootProject.layout.projectDirectory.dir("licenses")) {
 +        into("META-INF/licenses/quantum-ports")
@@ -95,7 +95,8 @@
          val gitHash = git.exec(providers, "rev-parse", "--short=7", "HEAD").get().trim()
          val implementationVersion = "$mcVersion-${build ?: "DEV"}-$gitHash"
          val date = git.exec(providers, "show", "-s", "--format=%ci", gitHash).get().trim()
-         val gitBranch = git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD").get().trim()
+-        val gitBranch = git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD").get().trim()
++        val gitBranch = "Allync" // Quantum - owner-facing version branding; never expose local agent branch names
          attributes(
              "Main-Class" to "org.bukkit.craftbukkit.Main",
 -            "Implementation-Title" to "Paper",
@@ -117,7 +118,7 @@
 @@ -246,7 +284,7 @@
      jvmArgumentProviders.add(provider)
  }
- 
+
 -val generatedDir: java.nio.file.Path = layout.projectDirectory.dir("src/generated/java").asFile.toPath()
 +val generatedDir: java.nio.file.Path = layout.projectDirectory.dir("../paper-server/src/generated/java").asFile.toPath() // Purpur
  idea {
@@ -126,7 +127,7 @@
 @@ -326,7 +364,7 @@
      mainClass.set(null as String?)
  }
- 
+
 -fill {
 +/* fill { // Purpur - we don't use fill
      project("paper")

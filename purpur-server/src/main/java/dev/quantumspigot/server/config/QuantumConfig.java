@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.yaml.snakeyaml.LoaderOptions;
@@ -18,7 +19,7 @@ import org.yaml.snakeyaml.error.YAMLException;
 
 /** Validated once at startup; no YAML access from the tick path. */
 public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagnostics, Workers workers,
-                            boolean coloredCommands, Performance performance) {
+                            boolean coloredCommands, LoginAdmission loginAdmission, Performance performance) {
     public enum Profile { COMPATIBILITY, BALANCED, CUSTOM }
 
     public record Diagnostics(boolean enabled, int historySeconds, double lagThresholdMs, int consecutiveTicks,
@@ -27,6 +28,7 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                               boolean pluginAttribution, int pluginSampleEvery) {}
 
     public record Workers(int mainReserve, int jvmReserve, int maximumTotal) {}
+    public record LoginAdmission(int intervalSeconds) {}
 
     // Null overrides mean inherit the existing Paper/Spigot/Purpur setting.
     public record Hopper(Integer transferTicks, Integer checkTicks, Integer amount, Boolean cooldownWhenFull,
@@ -36,10 +38,10 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                            Boolean lavaObscures, Boolean usePermission) {}
     public record Blocks(Boolean blockEntityTicking, Integer maxBlockTicks, Integer maxFluidTicks) {}
     public record WorldTuning(Hopper hopper, ArmorStands armorStands, AntiXray antiXray, Blocks blocks,
-                              String redstone, Integer autoSaveChunks, Boolean waypointCollections) {
+                              String redstone, Integer autoSaveChunks, Integer mobSpawnRange, Boolean waypointCollections) {
         public static final WorldTuning INHERIT = new WorldTuning(new Hopper(null, null, null, null, null, null),
             new ArmorStands(null, null, null, null, null), new AntiXray(null, null, null, null, null, null),
-            new Blocks(null, null, null), null, null, null);
+            new Blocks(null, null, null), null, null, null, null);
     }
     public record Performance(boolean enabled, boolean disableBundledSpark, Double generateRate, Double loadRate,
                               Double sendRate, Integer concurrentGenerates, Integer concurrentLoads,
@@ -94,6 +96,40 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
         Document diagnostics = new Document(directory.resolve("quantum-diagnostics.yml"));
         Document threading = new Document(directory.resolve("quantum-threading.yml"));
         Document performance = new Document(directory.resolve("quantum-performance.yml"));
+        QuantumConfig result = parse(global, diagnostics, threading, performance, safeMode);
+        global.saveDefaults();
+        diagnostics.saveDefaults();
+        threading.saveDefaults();
+        performance.saveDefaults();
+        return result;
+    }
+
+    /** Loads the single server-root configuration and migrates the legacy split files once. */
+    public static QuantumConfig loadRoot(Path serverRoot, boolean safeMode) throws IOException, InvalidConfigurationException {
+        Path rootPath = serverRoot.resolve("quantumspigot.yml");
+        boolean migrate = !Files.exists(rootPath);
+        Document root = new Document(rootPath);
+        if (migrate) {
+            Path legacy = serverRoot.resolve("config").resolve("quantum");
+            if (Files.isDirectory(legacy)) {
+                Document global = new Document(legacy.resolve("quantum-global.yml"));
+                Document diagnostics = new Document(legacy.resolve("quantum-diagnostics.yml"));
+                Document threading = new Document(legacy.resolve("quantum-threading.yml"));
+                Document performance = new Document(legacy.resolve("quantum-performance.yml"));
+                copySection(global.yaml, root.yaml, "", "", true);
+                copySection(diagnostics.yaml, root.yaml, "diagnostics", "diagnostics", false);
+                copySection(threading.yaml, root.yaml, "threading", "threading", false);
+                copySection(performance.yaml, root.yaml, "", "performance", true);
+                for (Document document : List.of(global, diagnostics, threading, performance)) backupLegacy(document.path);
+            }
+        }
+        QuantumConfig result = parse(root, root, root, root.view("performance"), safeMode);
+        root.saveDefaults();
+        return result;
+    }
+
+    private static QuantumConfig parse(Document global, Document diagnostics, Document threading,
+                                        Document performance, boolean safeMode) throws InvalidConfigurationException {
         Profile configured;
         String profile = global.string("profile.active", "balanced", "compatibility bypasses Quantum tuning; balanced/custom permit explicit performance overrides.");
         try {
@@ -120,13 +156,30 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                 threading.integer("threading.jvm-reserve", 1, 0, 1024, "Additional reservation for JVM/GC work."),
                 threading.autoPositive("threading.maximum-total-workers", -1, "-1: automatic. Quantum budget only; does not resize upstream workers.")),
             global.bool("commands.colored-output", true, "Color Quantum command headers, labels and health metrics; false uses plain text."),
+            new LoginAdmission(global.integer("network.login-admission-interval-seconds", 5, 0, 300,
+                "Seconds between completed login admissions. Zero disables spreading; five is the survival-friendly default.")),
             loadPerformance(performance));
-        // Validate every file before changing any of them.
-        global.saveDefaults();
-        diagnostics.saveDefaults();
-        threading.saveDefaults();
-        performance.saveDefaults();
         return result;
+    }
+
+    private static void copySection(ConfigurationSection source, ConfigurationSection target,
+                                    String sourcePrefix, String targetPrefix, boolean skipVersion) {
+        for (String key : source.getKeys(false)) {
+            if (skipVersion && key.equals("config-version")) continue;
+            String sourcePath = sourcePrefix.isEmpty() ? key : sourcePrefix + "." + key;
+            String targetPath = targetPrefix.isEmpty() ? key : targetPrefix + "." + key;
+            Object value = source.get(sourcePath);
+            if (value instanceof ConfigurationSection section) {
+                target.createSection(targetPath);
+                copySection(section, target, "", targetPath, false);
+            } else target.set(targetPath, value);
+        }
+    }
+
+    private static void backupLegacy(Path path) throws IOException {
+        if (!Files.exists(path)) return;
+        Path backup = path.resolveSibling(path.getFileName() + ".pre-root.yml");
+        if (!Files.exists(backup)) Files.copy(path, backup);
     }
 
     private static Performance loadPerformance(Document doc) throws InvalidConfigurationException {
@@ -138,14 +191,15 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
         Integer concurrentGenerate = doc.overrideInt("chunks.concurrent-generates", null, -1, 1024, "Per player: inherit, -1 unlimited, 0 automatic, or positive.");
         Integer concurrentLoad = doc.overrideInt("chunks.concurrent-loads", null, -1, 1024, "Per player: inherit, -1 unlimited, 0 automatic, or positive.");
         WorldTuning defaults = loadWorld(doc, "world-defaults", WorldTuning.INHERIT);
-        if (!doc.yaml.contains("worlds", true)) {
-            doc.yaml.createSection("worlds");
-            doc.yaml.setComments("worlds", List.of("Overrides by dimension key, e.g. minecraft:overworld or minecraft:the_nether. Missing/inherit values use world-defaults."));
-            doc.changed = true;
+        String worldsKey = doc.fullKey("worlds");
+        if (!doc.yaml.contains(worldsKey, true)) {
+            doc.yaml.createSection(worldsKey);
+            doc.yaml.setComments(worldsKey, List.of("Overrides by dimension key, e.g. minecraft:overworld or minecraft:the_nether. Missing/inherit values use world-defaults."));
+            doc.owner.changed = true;
         }
-        if (!doc.yaml.isConfigurationSection("worlds")) throw doc.invalid("worlds", "a mapping of dimension keys to settings");
+        if (!doc.yaml.isConfigurationSection(worldsKey)) throw doc.invalid("worlds", "a mapping of dimension keys to settings");
         Map<String, WorldTuning> worlds = new LinkedHashMap<>();
-        for (String key : doc.yaml.getConfigurationSection("worlds").getKeys(false)) {
+        for (String key : doc.yaml.getConfigurationSection(worldsKey).getKeys(false)) {
             if (!key.matches("[a-z0-9_-]+:[a-z0-9_/-]+")) throw doc.invalid("worlds." + key, "a dimension key such as minecraft:overworld");
             worlds.put(key, loadWorld(doc, "worlds." + key, defaults));
         }
@@ -207,16 +261,22 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
                 d.overrideInt(p + ".blocks.max-scheduled-fluid-ticks", b.maxFluidTicks(), 1, 1000000, "inherit or per-tick scheduled fluid budget. Native default 65536; lower values delay fluid flow.")),
             d.redstone(p + ".redstone.implementation", parent.redstone()),
             d.overrideInt(p + ".saving.max-chunks-per-tick", parent.autoSaveChunks(), 1, 10000, "inherit or positive chunk autosave budget. Lower values spread saves over more ticks; autosave interval stays upstream-controlled."),
+            d.overrideInt(p + ".spawning.mob-spawn-range", parent.mobSpawnRange(), 1, 8, "inherit or 1..8 chunks. Four is the usual survival compromise; lower values reduce natural-spawn work."),
             d.overrideBool(p + ".experimental.waypoint-collections", parent.waypointCollections(), "EXPERIMENTAL, default OFF. Reduce waypoint collection allocation without changing locator visibility or update frequency. inherit/false uses upstream; safe/compatibility mode bypasses this."));
     }
 
     private static final class Document {
         private final Path path;
-        private final YamlConfiguration yaml = new YamlConfiguration();
+        private final YamlConfiguration yaml;
+        private final Document owner;
+        private final String prefix;
         private boolean changed;
 
         private Document(Path path) throws IOException, InvalidConfigurationException {
             this.path = path;
+            this.owner = this;
+            this.prefix = "";
+            this.yaml = new YamlConfiguration();
             this.yaml.options().parseComments(true);
             if (Files.exists(path)) {
                 if (Files.size(path) > 1_048_576) throw this.invalid("<document>", "at most 1 MiB");
@@ -241,6 +301,21 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
             this.integer("config-version", 1, 1, 1, "Configuration schema; newer versions must not be downgraded.");
         }
 
+        private Document(Document owner, String prefix) {
+            this.path = owner.path;
+            this.owner = owner.owner;
+            this.prefix = prefix;
+            this.yaml = owner.yaml;
+        }
+
+        private Document view(String child) {
+            return new Document(this.owner, this.prefix.isEmpty() ? child : this.prefix + "." + child);
+        }
+
+        private String fullKey(String key) {
+            return this.prefix.isEmpty() || key.isEmpty() ? (this.prefix.isEmpty() ? key : this.prefix) : this.prefix + "." + key;
+        }
+
         private void validateTree(Object value, String prefix) throws InvalidConfigurationException {
             if (value instanceof Map<?, ?> mapping) {
                 for (var entry : mapping.entrySet()) {
@@ -258,20 +333,21 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
 
         private Object value(String key, Object fallback, String comment) throws InvalidConfigurationException {
             // A malformed parent must not be silently replaced by a mapping.
-            int dot = key.indexOf('.');
+            String full = this.fullKey(key);
+            int dot = full.indexOf('.');
             while (dot != -1) {
-                String parent = key.substring(0, dot);
+                String parent = full.substring(0, dot);
                 if (this.yaml.contains(parent, true) && !this.yaml.isConfigurationSection(parent)) {
-                    throw this.invalid(parent, "a YAML mapping");
+                    throw new InvalidConfigurationException(this.path + ": " + parent + " expected a YAML mapping");
                 }
-                dot = key.indexOf('.', dot + 1);
+                dot = full.indexOf('.', dot + 1);
             }
-            if (!this.yaml.contains(key, true)) {
-                this.yaml.set(key, fallback);
-                this.yaml.setComments(key, List.of(comment));
-                this.changed = true;
+            if (!this.yaml.contains(full, true)) {
+                this.yaml.set(full, fallback);
+                this.yaml.setComments(full, List.of(comment));
+                this.owner.changed = true;
             }
-            return this.yaml.get(key);
+            return this.yaml.get(full);
         }
 
         private String string(String key, String fallback, String comment) throws InvalidConfigurationException {
@@ -342,24 +418,24 @@ public record QuantumConfig(Profile profile, boolean safeMode, Diagnostics diagn
         }
 
         private InvalidConfigurationException invalid(String key, String expected) {
-            return new InvalidConfigurationException(this.path + ": " + key + " expected " + expected);
+            return new InvalidConfigurationException(this.path + ": " + this.fullKey(key) + " expected " + expected);
         }
 
         private void saveDefaults() throws IOException {
-            if (!this.changed) return;
-            Files.createDirectories(this.path.getParent());
-            Path temporary = Files.createTempFile(this.path.getParent(), ".quantum-", ".tmp");
+            if (this != this.owner || !this.owner.changed) return;
+            Files.createDirectories(this.owner.path.getParent());
+            Path temporary = Files.createTempFile(this.owner.path.getParent(), ".quantum-", ".tmp");
             try {
-                Files.writeString(temporary, this.yaml.saveToString());
-                if (Files.exists(this.path)) {
+                Files.writeString(temporary, this.owner.yaml.saveToString());
+                if (Files.exists(this.owner.path)) {
                     // A unique backup preserves operator content before adding new keys.
-                    Path backup = Files.createTempFile(this.path.getParent(), this.path.getFileName() + ".", ".bak");
-                    Files.copy(this.path, backup, StandardCopyOption.REPLACE_EXISTING);
+                    Path backup = Files.createTempFile(this.owner.path.getParent(), this.owner.path.getFileName() + ".", ".bak");
+                    Files.copy(this.owner.path, backup, StandardCopyOption.REPLACE_EXISTING);
                 }
                 try {
-                    Files.move(temporary, this.path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                    Files.move(temporary, this.owner.path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 } catch (AtomicMoveNotSupportedException e) {
-                    Files.move(temporary, this.path, StandardCopyOption.REPLACE_EXISTING);
+                    Files.move(temporary, this.owner.path, StandardCopyOption.REPLACE_EXISTING);
                 }
             } finally {
                 Files.deleteIfExists(temporary);

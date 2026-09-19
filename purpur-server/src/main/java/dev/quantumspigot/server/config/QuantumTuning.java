@@ -51,6 +51,7 @@ public final class QuantumTuning {
         paper.environment.maxFluidTicks = or(b.maxFluidTicks(), paper.environment.maxFluidTicks);
         if (tuning.redstone() != null) paper.misc.redstoneImplementation = WorldConfiguration.Misc.RedstoneImplementation.valueOf(tuning.redstone());
         paper.chunks.maxAutoSaveChunksPerTick = or(tuning.autoSaveChunks(), paper.chunks.maxAutoSaveChunksPerTick);
+        if (tuning.mobSpawnRange() != null) spigot.mobSpawnRange = tuning.mobSpawnRange().byteValue();
         return !Boolean.FALSE.equals(a.gravity());
     }
 

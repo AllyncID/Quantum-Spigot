@@ -1,0 +1,16 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 07:00:00 +0800
+Subject: [PATCH] Skip remote profile lookups in offline mode
+
+Offline local/proxy servers do not authenticate with Mojang. Avoid fetching
+profile textures during login in that mode so large local join tests and
+offline survival servers do not depend on Mojang rate limits.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+--- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+@@ -355,1 +355,1 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener, TickablePacketListener {
+-        profile.complete(true); // Paper - setPlayerProfileAPI
++        profile.complete(true, ServerLoginPacketListenerImpl.this.server.usesAuthentication()); // Quantum - offline local servers do not need remote texture lookups

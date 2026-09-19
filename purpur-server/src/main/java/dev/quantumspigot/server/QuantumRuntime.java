@@ -30,7 +30,7 @@ public final class QuantumRuntime {
     private static volatile QuantumRuntime instance;
     private final Server server;
     private final Thread mainThread;
-    private final QuantumConfig config;
+    private volatile QuantumConfig config;
     private final WorkerBudget budget;
     private final TickHistory ticks;
     private final LagSpikeRecorder lag;
@@ -75,7 +75,7 @@ public final class QuantumRuntime {
     }
 
     public static void initialize(Server server, boolean safeMode) throws IOException, InvalidConfigurationException {
-        QuantumRuntime runtime = new QuantumRuntime(server, QuantumConfig.load(Path.of("config", "quantum"), safeMode));
+        QuantumRuntime runtime = new QuantumRuntime(server, QuantumConfig.loadRoot(Path.of("."), safeMode));
         instance = runtime;
         QuantumTuning.applyGlobal(runtime.config, io.papermc.paper.configuration.GlobalConfiguration.get());
         if (runtime.config.performanceActive() && runtime.config.performance().disableBundledSpark()) {
@@ -115,6 +115,12 @@ public final class QuantumRuntime {
     public static boolean waypointCollections(String dimensionKey) {
         QuantumRuntime runtime = instance;
         return runtime != null && Boolean.TRUE.equals(runtime.config.worldTuning(dimensionKey).waypointCollections());
+    }
+
+    public static long loginAdmissionIntervalNanos() {
+        QuantumRuntime runtime = instance;
+        int seconds = runtime == null ? 5 : runtime.config.loginAdmission().intervalSeconds();
+        return java.util.concurrent.TimeUnit.SECONDS.toNanos(seconds);
     }
 
     public static QuantumConfig.Algorithms algorithms() {
@@ -242,6 +248,20 @@ public final class QuantumRuntime {
             runtime.server.getLogger().warning(String.format(Locale.ROOT,
                 "[QuantumSpigot] Plugin %s sync task #%d (%s) took %.2f ms. Repeated warnings suppressed for %d seconds.",
                 plugin, taskId, taskClass, durationNanos / 1_000_000.0, runtime.config.diagnostics().warningIntervalSeconds()));
+        }
+    }
+
+    /** Parses and validates a new immutable snapshot before publishing it. Runtime-owned pools/world settings stay restart-required. */
+    public synchronized String reload() {
+        QuantumConfig previous = this.config;
+        try {
+            QuantumConfig next = QuantumConfig.loadRoot(Path.of("."), previous.safeMode());
+            this.config = next;
+            this.server.getLogger().info("[QuantumSpigot] Root configuration reloaded atomically; worker pools and world tuning remain restart-required.");
+            return "loaded quantumspigot.yml; worker pools/world tuning require restart";
+        } catch (Exception error) {
+            this.server.getLogger().log(Level.WARNING, "[QuantumSpigot] Configuration reload rejected; previous snapshot retained", error);
+            return "rejected: " + error.getMessage();
         }
     }
 

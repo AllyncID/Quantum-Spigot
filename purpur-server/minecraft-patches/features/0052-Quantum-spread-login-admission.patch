@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 06:35:00 +0800
+Subject: [PATCH] Spread player login admission
+
+Reserve one main-thread login slot every five seconds so a reconnect burst
+does not run all player setup work in the same tick window. Waiting logins do
+not block the server thread or expire while they hold a reserved slot.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+--- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+@@ -55,5 +55,7 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener, TickablePacketListener {
+ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener, TickablePacketListener {
+     private static final AtomicInteger UNIQUE_THREAD_ID = new AtomicInteger(0);
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private static final java.util.concurrent.ExecutorService authenticatorPool = java.util.concurrent.Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("User Authenticator #", 0).uncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER)).factory()); // Paper - Virtual authenticator threads
++    private static long quantumNextLoginNanos;
+     private static final int MAX_TICKS_BEFORE_LOGIN = 600;
+@@ -64,3 +66,4 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener, TickablePacketListener {
+     public volatile ServerLoginPacketListenerImpl.State state = ServerLoginPacketListenerImpl.State.HELLO;
+     private int tick;
++    private long quantumLoginAtNanos = -1L; // Quantum - reserved main-thread login slot
+     public @Nullable String requestedUsername; // Paper - public
+@@ -94,2 +97,3 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener, TickablePacketListener {
+         if (this.state == ServerLoginPacketListenerImpl.State.VERIFYING) {
++            if (!this.quantumLoginSlotReady()) return;
+             this.verifyLoginAndFinishConnectionSetup(Objects.requireNonNull(this.authenticatedProfile));
+@@ -107,5 +111,15 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener, TickablePacketListener {
+     // Paper start - login cookie API
+         this.tickTimeout();
+     }
+
++    private boolean quantumLoginSlotReady() {
++        if (this.quantumLoginAtNanos < 0L) {
++            final long now = System.nanoTime();
++            this.quantumLoginAtNanos = Math.max(now, quantumNextLoginNanos);
++            quantumNextLoginNanos = this.quantumLoginAtNanos + dev.quantumspigot.server.QuantumRuntime.loginAdmissionIntervalNanos();
++        }
++        this.tick = 0; // Waiting for the queue is intentional; do not expire a valid login.
++        return System.nanoTime() >= this.quantumLoginAtNanos;
++    }
++
+     public void tickTimeout() {

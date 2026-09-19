@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 02:40:00 +0800
+Subject: [PATCH] Reuse nearby player index for natural spawning
+
+NaturalSpawner repeatedly searched the full world player list for each spawn
+position. Reuse Moonrise's existing SPAWN_RANGE nearby-player list, which covers
+the 128-block natural-spawn distance, and retain the vanilla scan as a fallback
+when the indexed list is empty or filtered out.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
+--- a/net/minecraft/world/level/NaturalSpawner.java
++++ b/net/minecraft/world/level/NaturalSpawner.java
+@@ -286,7 +286,7 @@ public final class NaturalSpawner {
+                     pos.set(x, yStart, z);
+                     double xx = x + 0.5;
+                     double zz = z + 0.5;
+-                    Player nearestPlayer = level.getNearestPlayer(xx, yStart, zz, -1.0, level.purpurConfig.mobSpawningIgnoreCreativePlayers); // Purpur - mob spawning option to ignore creative players
++                    Player nearestPlayer = getNearestPlayerForSpawning(level, chunk, xx, yStart, zz, level.purpurConfig.mobSpawningIgnoreCreativePlayers); // Quantum - reuse Moonrise nearby-player index
+                     if (nearestPlayer != null) {
+                         double nearestPlayerDistanceSqr = nearestPlayer.distanceToSqr(xx, yStart, zz);
+                         if (level.isLoadedAndInBounds(pos) && isRightDistanceToPlayerAndSpawnPoint(level, chunk, pos, nearestPlayerDistanceSqr)) { // Paper - don't load chunks for mob spawn
+@@ -357,1 +357,33 @@ public final class NaturalSpawner {
++    private static Player getNearestPlayerForSpawning(
++        final ServerLevel level, final ChunkAccess chunk, final double x, final double y, final double z,
++        final boolean ignoreCreativePlayers
++    ) {
++        final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerPlayer> nearby =
++            level.moonrise$getNearbyPlayers().getPlayers(
++                chunk.getPos(),
++                ca.spottedleaf.moonrise.common.misc.NearbyPlayers.NearbyMapType.SPAWN_RANGE
++            );
++        if (nearby != null) {
++            final net.minecraft.server.level.ServerPlayer[] players = nearby.getRawDataUnchecked();
++            Player nearest = null;
++            double bestDistance = -1.0;
++            for (int i = 0, len = nearby.size(); i < len; ++i) {
++                final net.minecraft.server.level.ServerPlayer player = players[i];
++                if (player.isSpectator() || (ignoreCreativePlayers && player.isCreative())) {
++                    continue;
++                }
++                final double distance = player.distanceToSqr(x, y, z);
++                if (bestDistance == -1.0 || distance < bestDistance) {
++                    bestDistance = distance;
++                    nearest = player;
++                }
++            }
++            // SPAWN_RANGE is the existing eight-chunk index used by chunk ticking;
++            // it covers the vanilla 128-block natural-spawn boundary.
++            if (nearest != null) {
++                return nearest;
++            }
++        }
++        return level.getNearestPlayer(x, y, z, -1.0, ignoreCreativePlayers);
++    }
+    private static boolean isRightDistanceToPlayerAndSpawnPoint(

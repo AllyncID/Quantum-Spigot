@@ -90,6 +90,7 @@ public final class BotDriver {
     private static byte[] forwardingSecret;
     private static final int ARENA_Y = Integer.getInteger("quantum.arena-y", 160);
     private static final int ARENA_SPACING = Integer.getInteger("quantum.arena-spacing", 8);
+    private static final int READ_TIMEOUT_SECONDS = Integer.getInteger("quantum.bot-read-timeout-seconds", 30);
     private static final Map<String, AtomicLong> ACTIONS = new ConcurrentHashMap<>();
     private static void count(String action) { ACTIONS.computeIfAbsent(action, ignored -> new AtomicLong()).incrementAndGet(); }
     private static Map<String, Long> actions() {
@@ -108,13 +109,13 @@ public final class BotDriver {
             emit(Map.of("minecraft", "26.2", "protocol", 776, "driver", "local-active", "profiles", List.of("idle", "mixed", "explore")));
             return;
         }
-        if (args.length < 4 || args.length > 6) throw new IllegalArgumentException("Usage: BotDriver <port> <bots 1..300> <seconds 10..3600> <output.json> [idle|mixed|explore] [warmupSeconds]");
+        if (args.length < 4 || args.length > 6) throw new IllegalArgumentException("Usage: BotDriver <port> <bots 1..450> <seconds 10..3600> <output.json> [idle|mixed|explore] [warmupSeconds]");
         if (args.length >= 5) profile = args[4];
         if (!List.of("idle", "mixed", "explore").contains(profile)) throw new IllegalArgumentException("Unknown profile");
         int port = Integer.parseInt(args[0]), count = Integer.parseInt(args[1]), seconds = Integer.parseInt(args[2]);
         int warmupSeconds = args.length == 6 ? Integer.parseInt(args[5]) : 0;
         if (warmupSeconds < 0 || warmupSeconds >= seconds) throw new IllegalArgumentException("Invalid warmup duration");
-        if (port < 1024 || port > 65535 || count < 1 || count > 300 || seconds < 10 || seconds > 3600) {
+        if (port < 1024 || port > 65535 || count < 1 || count > 450 || seconds < 10 || seconds > 3600) {
             throw new IllegalArgumentException("Port, count or duration outside allowed range");
         }
         Path output = Path.of(args[3]).toAbsolutePath();
@@ -139,7 +140,7 @@ public final class BotDriver {
             bot.session.connect(false);
             Thread.sleep(profile.equals("idle") ? 500 : 200); // bounded ramp, not a login-burst test
         }
-        long loginDeadline = System.nanoTime() + 90_000_000_000L;
+        long loginDeadline = System.nanoTime() + Math.max(90_000_000_000L, (long) count * 6_000_000_000L); // Quantum - allow the five-second admission queue to drain
         while (ready(bots) != count && System.nanoTime() < loginDeadline && DISCONNECTS.get() == 0) Thread.sleep(50);
         boolean allSpawned = ready(bots) == count;
         int minReady = ready(bots);
@@ -234,6 +235,7 @@ public final class BotDriver {
                 .setRemoteSocketAddress(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), port))
                 .setProtocol(new MinecraftProtocol(this.name)).create();
             this.session.setFlag(BuiltinFlags.ATTEMPT_SRV_RESOLVE, false);
+            this.session.setFlag(BuiltinFlags.READ_TIMEOUT, READ_TIMEOUT_SECONDS);
             this.session.setFlag(MinecraftConstants.FOLLOW_TRANSFERS, false);
             this.session.addListener(this);
         }

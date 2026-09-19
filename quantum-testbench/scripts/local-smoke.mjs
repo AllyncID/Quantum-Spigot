@@ -21,7 +21,7 @@ if (mode === 'prepare') {
   const java = path.resolve(argument, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
   const installedLibraries = path.join(bench, 'build/install/quantum-testbench/lib');
   const scenario = scenarioFile ? JSON.parse(fs.readFileSync(scenarioFile, 'utf8')) : null;
-  if (scenario?.server && !['quantum', 'purpur'].includes(scenario.server)) throw Error('Unknown server');
+  if (scenario?.server && !['quantum', 'purpur', 'nautilus'].includes(scenario.server)) throw Error('Unknown server');
   if (scenario?.allocator && !['adaptive', 'pooled'].includes(scenario.allocator)) throw Error('Unknown allocator');
   const viewDistance = scenario?.viewDistance ?? 6, simulationDistance = scenario?.simulationDistance ?? 4;
   if (![viewDistance, simulationDistance].every(n => Number.isInteger(n) && n >= 2 && n <= 16)) throw Error('Distances must be 2..16');
@@ -31,7 +31,7 @@ if (mode === 'prepare') {
   if (!Number.isInteger(arenaY) || arenaY < 80 || arenaY > 310 || !Number.isInteger(arenaSpacing) || arenaSpacing < 8 || arenaSpacing > 64) throw Error('Invalid arena bounds');
   if (typeof arenaPrepared !== 'boolean') throw Error('arenaPrepared must be boolean');
   if (scenario && (!Array.isArray(scenario.stages) || !scenario.stages.length || scenario.stages.some(s =>
-    !Number.isInteger(s.players) || s.players < 1 || s.players > 300 || !Number.isInteger(s.seconds)
+    !Number.isInteger(s.players) || s.players < 1 || s.players > 450 || !Number.isInteger(s.seconds)
     || s.seconds < 60 || s.seconds > 1800 || !['mixed', 'explore'].includes(s.profile)))) throw Error('Invalid local scenario');
   if (!fs.existsSync(java) || !fs.existsSync(jar) || !fs.existsSync(installedLibraries)) throw Error('Build the server and bot driver and supply JDK 25 first');
   const directory = path.join(runsRoot, 'smoke-' + new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID().slice(0, 8));
@@ -59,7 +59,7 @@ if (mode === 'prepare') {
   fs.writeFileSync(path.join(directory, 'eula.txt'), '# Operator must explicitly accept https://www.minecraft.net/en-us/eula\neula=false\n');
   fs.writeFileSync(path.join(directory, 'server.properties'), [
     'server-ip=127.0.0.1', 'server-port=25570', 'online-mode=false', 'enforce-secure-profile=false',
-    'enable-rcon=false', 'enable-query=false', 'max-players=300', `view-distance=${viewDistance}`, `simulation-distance=${simulationDistance}`,
+    'enable-rcon=false', 'enable-query=false', 'max-players=450', `view-distance=${viewDistance}`, `simulation-distance=${simulationDistance}`,
     'pause-when-empty-seconds=-1', 'level-seed=728194', 'level-name=world', 'gamemode=survival',
     'difficulty=normal', 'motd=Quantum local testbench', 'player-idle-timeout=0', 'spawn-protection=0', ''
   ].join('\n'));
@@ -95,7 +95,7 @@ async function run(directory) {
   config.arenaSpacing ??= 8;
   config.arenaPrepared ??= false;
   if (config.status !== 'PREPARED_NOT_RUN' || config.directory !== directory || fs.existsSync(path.join(directory, 'result.json'))) throw Error('Prepare a fresh run');
-  if (config.host !== '127.0.0.1' || config.plugins.length || config.stages.some(s => s.players < 1 || s.players > 300)) throw Error('Local scope: loopback, no plugins, at most 300 bots');
+  if (config.host !== '127.0.0.1' || config.plugins.length || config.stages.some(s => s.players < 1 || s.players > 450)) throw Error('Local scope: loopback, no plugins, at most 450 bots');
   if (!/^eula\s*=\s*true\s*$/mi.test(fs.readFileSync(path.join(directory, 'eula.txt'), 'utf8'))) throw Error('Minecraft EULA has not been accepted by the operator; no server was started');
   if (os.freemem() < 12 * 2**30) throw Error('Initial local smoke needs at least 12 GiB available before startup');
   if (sha(path.join(directory, 'server.jar')) !== config.serverSha256 || sha(path.join(directory, 'server.properties')) !== config.propertiesSha256) throw Error('Prepared server/config hash changed');

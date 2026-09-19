@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AllyncID <177745969+AllyncID@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 04:10:00 +0800
+Subject: [PATCH] Bound locator updates at high player counts
+
+Locator connections are still created and retained for every eligible player.
+At high counts, update the live connections on a bounded cadence so the
+locator remains available without spending the full O(players^2) work every
+tick. Keep the vanilla cadence through 200 players.
+Original Quantum additions: MIT (LICENSE-QUANTUM).
+
+diff --git a/net/minecraft/server/waypoints/ServerWaypointManager.java b/net/minecraft/server/waypoints/ServerWaypointManager.java
+--- a/net/minecraft/server/waypoints/ServerWaypointManager.java
++++ b/net/minecraft/server/waypoints/ServerWaypointManager.java
+@@ -56,4 +56,5 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+                 final long block = ((net.minecraft.world.entity.LivingEntity) waypoint).blockPosition().asLong();
+                 final Long previousBlock = this.quantumWaypointBlocks.put(waypoint, block);
+                 if (previousBlock != null && previousBlock.longValue() == block) return;
++                if (!this.quantumShouldUpdateLocator(((net.minecraft.world.entity.LivingEntity) waypoint).level().getGameTime(), ((net.minecraft.world.entity.LivingEntity) waypoint).getId())) return;
+             }
+@@ -128,4 +128,5 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+             final long block = player.blockPosition().asLong();
+             final Long previousBlock = this.quantumPlayerBlocks.put(player, block);
+             if (previousBlock != null && previousBlock.longValue() == block) return;
++            if (!this.quantumShouldUpdateLocator(player.level().getGameTime(), player.getId())) return;
+             var row = this.connections.row(player);
+@@ -194,4 +194,11 @@ public class ServerWaypointManager implements WaypointManager<WaypointTransmitter> {
+     // Paper end - optimize ServerWaypointManager with locator bar disabled
+     }
+
++    // Quantum - cap locator O(players^2) work while retaining live markers.
++    // ponytail: high-player cadence can delay a marker refresh for a few seconds; lower the interval only after profiling.
++    private boolean quantumShouldUpdateLocator(final long gameTime, final int entityId) {
++        final int players = this.players.size();
++        if (players <= 200) return true;
++        return Math.floorMod(gameTime + entityId, Math.max(1, (players + 4) / 5)) == 0;
++    }
+
+     private void createConnection(final ServerPlayer player, final WaypointTransmitter waypoint) {

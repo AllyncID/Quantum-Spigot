@@ -22,7 +22,7 @@ import org.bukkit.permissions.PermissionDefault;
 import static dev.quantumspigot.server.commands.QuantumMessages.*;
 
 public final class QuantumCommand extends Command {
-    private static final List<String> SUBCOMMANDS = List.of("help", "version", "tps", "mspt", "worlds", "health", "threads", "chunks", "entities", "plugins", "profile", "config", "gc");
+    private static final List<String> SUBCOMMANDS = List.of("help", "version", "tps", "mspt", "worlds", "health", "threads", "chunks", "entities", "plugins", "profile", "config", "reload", "gc");
     private final Server server;
     private final QuantumRuntime runtime;
 
@@ -172,6 +172,7 @@ public final class QuantumCommand extends Command {
             }
             case "profile" -> this.profile(sender);
             case "config" -> this.configuration(sender);
+            case "reload" -> this.line(sender, note(this.runtime.reload()));
             case "gc" -> this.gc(sender);
             default -> throw new IllegalStateException(subcommand);
         }
@@ -238,7 +239,8 @@ public final class QuantumCommand extends Command {
     private void profile(CommandSender sender) {
         this.line(sender, pair("Profile", this.runtime.config().profile()).append(separator()).append(pair("Safe mode", this.runtime.config().safeMode())));
         this.line(sender, pair("Performance overrides", this.runtime.config().performanceActive() ? "enabled" : "disabled"));
-        this.line(sender, note("YAML changes require restart. Compatibility/safe mode bypasses Quantum tuning."));
+        this.line(sender, pair("Login admission interval", this.runtime.config().loginAdmission().intervalSeconds() + " seconds"));
+        this.line(sender, note("Edit quantumspigot.yml; /quantum reload validates and swaps the immutable snapshot. World and worker changes require restart."));
     }
 
     private void configuration(CommandSender sender) {
@@ -270,7 +272,7 @@ public final class QuantumCommand extends Command {
             this.line(sender, pair("Autosave chunks/tick", p.chunks.maxAutoSaveChunksPerTick));
             this.line(sender, pair("Experimental waypoint collections", level.getWaypointManager().quantumWaypointCollections));
         }
-        this.line(sender, note("Effective startup values. Edit config/quantum/quantum-performance.yml, then restart."));
+        this.line(sender, note("Effective values. Root source: quantumspigot.yml. World and worker settings are restart-required."));
     }
 
     private void gc(CommandSender sender) {
